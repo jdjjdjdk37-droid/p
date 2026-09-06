@@ -69,7 +69,7 @@ MAX_RESULTS = 0
 PROXY_FILE = "/storage/emulated/0/Download/proxyscrape_premium_http_proxies.txt"
 
 PASSWORDS_IQ = ["qwer1234", "1234qwer", "1q2w3e4r", "qwert12345", "zxcv1234", "12345qwert"]
-PHONE_PASSWORDS = ["077", "078", "079"،"075","078"]
+PHONE_PASSWORDS = ["077","079"،"075","078"]
 
 def _aes_cbc(key, iv, pt):
     cipher = AES.new(key, AES.MODE_CBC, iv)
