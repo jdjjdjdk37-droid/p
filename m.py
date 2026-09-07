@@ -52,7 +52,7 @@ HERA = "f580270da66e44438d5ed30fdb08ebba"
 SPRE = "2.0_2_"
 LOGIN_PATH = "/api/LudoAccountLoginRpcApiProxy/MobileAccountLogin"
 PROFILE_PATH = "/api/LudoAccountGRpcApiProxy/AccountProfileInfo"
-TIMEOUT = 15
+TIMEOUT = 3
 
 LOGIN_SERVERS = [
     "https://httpgateway.carrstuv.com",
