@@ -61,7 +61,7 @@ AREA_CODE = 964
 # PATHS
 LOGIN_PATH = "/api/LudoAccountLoginRpcApiProxy/MobileAccountLogin"
 PROFILE_PATH = "/api/LudoAccountGRpcApiProxy/AccountProfileInfo"
-TIMEOUT = 3
+TIMEOUT = 0.1
 
 # SERVERS
 LOGIN_SERVERS = [
